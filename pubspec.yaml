@@ -1,0 +1,14 @@
+name: socketire
+version: 0.0.1
+author: Alexander Ewetumo<trinoxf@gmail.com>
+description: A simple collection of client and server side websocket wrapper
+homepage: http://github.com/influx6/socketire.dart
+dependencies:
+  hub: 
+  	path: ../hub
+  invocable:
+  	path: ../invocable
+  statemanager:
+  	path: ../statemanager
+  streamable:
+  	path: ../streamable
