@@ -6,7 +6,7 @@ import 'package:socketire/socketire-client.dart';
 
 void main(){
 
-	var socket = Socketire.create('ws://127.0.0.1:3000');
+	var socket = SocketireClient.create('ws://127.0.0.1:3000');
 
 	socket.space('ws',(mesg){
 		print('receving: $mesg');
