@@ -20,7 +20,7 @@ class RequestSpecsClient extends RequestSpecs{
 		this._socket = socket;
 		this._socket.onMessage.listen((msg){
 			print('word: $msg : ${this.checker(msg)}');
-			if(!this.checker(msg)) return;
+			if(!this.checker(msg)) return null;
 			n(msg,this._socket,this);
 		});
 		this.whenOpen.emit(this);
@@ -50,16 +50,16 @@ class WebSocketRequestClient extends WebSocketRequest{
 	}
 }
 
-class Socketire{
+class SocketireClient{
 	final sm.Streamable errors = sm.Streamable.create();
 	bool _reboot  = false;
 	String root;
 	int retrySeconds = 2;
 	var subspace,db, rebooter;
 
-	static create(m) => new Socketire(m);
+	static create(m) => new SocketireClient(m);
 
-	Socketire(String m){
+	SocketireClient(String m){
 		this.root = m;
 		this.subspace = Hub.createMapDecorator();
 	}
@@ -80,7 +80,7 @@ class Socketire{
 	}
 
 	dynamic spec(String space){
-		if(!this.subspace.has(space)) return;
+		if(!this.subspace.has(space)) return null;
 		return this.subspace.get(space);
 	}
 
@@ -97,10 +97,16 @@ class Socketire{
 		var ws = new WebSocket(full);
 		var retry = this.retrySeconds;
 
+		var wsreq = WebSocketRequestClient.create(ws,null);
+
+		print(ws.on);
+
 		ws.onOpen.listen((e){
 			retry = 2;
 			sub.setSocket(ws,(msg,socket,req){
-				req.stream.emit(WebSocketRequestClient.create(socket,msg));
+				wsreq.socket = socket;
+				wsreq.message = msg;
+				req.stream.emit(wsreq);
 			});
 		});
 
@@ -113,17 +119,20 @@ class Socketire{
 		});
 
 		ws.onError.listen((e){
-			this.errors.emit(WebSocketRequestClient.create(ws,e));
+			wsreq.error = e;
+			this.errors.emit(wsreq);
 		});
 
 	}
 
-	void space(String space,Function matcher){
-	  if(this.subspace.has(space)) throw "Namespace $space already in used!";
-	  this.subspace.add(space,RequestSpecsClient.create(space,matcher));
+	dynamic space(String space,Function matcher){
+	  if(this.subspace.has(space)) return this.subspace.get(space);
+	  var sub = RequestSpecsClient.create(space,matcher);
+	  this.subspace.add(space,sub);
+	  return sub;
 	}
 
-	Streamable stream(String space){
+	sm.Streamable stream(String space){
 		if(!this.subspace.has(space)) return null;
 		return this.subspace.get(space).stream;
 	}

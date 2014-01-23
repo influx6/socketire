@@ -9,4 +9,5 @@ dependencies:
   invocable: any
   statemanager: any
   streamable: any
+  browser: any
 

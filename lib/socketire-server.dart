@@ -58,7 +58,7 @@ class WebSocketRequestServer extends WebSocketRequest{
 }
 
 
-class Socketire{
+class SocketireServer{
 	final subspace = Hub.createMapDecorator();
 	final sm.Streamable errors = sm.Streamable.create();
 	final sm.Streamable info = sm.Streamable.create();
@@ -68,17 +68,17 @@ class Socketire{
 	Future serverFuture;
 	WebSocket socket;
   	
-  	static create(addr,port,n,[s,k]) => new Socketire(addr,port,n,s,k);
-  	static createFrom(f,n,[h,k]) => new Socketire.fromServer(f,n,h,k);
+  	static create(addr,port,n,[s,k]) => new SocketireServer(addr,port,n,s,k);
+  	static createFrom(f,n,[h,k]) => new SocketireServer.fromServer(f,n,h,k);
 	
-	Socketire(String addr,num port,Function sh,[Function hh,Function err]){
+	SocketireServer(String addr,num port,Function sh,[Function hh,Function err]){
 		this.socketHandle = sh;
 		this.httpHandle = (hh == null ? (r){ return true; } : hh);
 		this.serverFuture = HttpSever.bind(addr,port);
 		this._setup(err);
 	}
 	
-	Socketire.fromServer(Future<HttpSever> binder,Function sh,[Function hh,Function err]){
+	SocketireServer.fromServer(Future<HttpSever> binder,Function sh,[Function hh,Function err]){
 		this.serverFuture = binder;
 		this.socketHandle = sh;
 		this.httpHandle = (hh == null ? (r){ return true; } : hh);
@@ -95,7 +95,7 @@ class Socketire{
 		return this.subspace.get(space);
 	}
 
-	Streamable stream(String space){
+	sm.Streamable stream(String space){
 		if(!this.subspace.has(space)) return null;
 		var stream = this.spec(space);
 		return stream.stream;
@@ -131,18 +131,16 @@ class Socketire{
 	  			if(e.hasSocket) return e.closeSocket();
 
 				WebSocketTransformer.upgrade(request).then((websocket){
-					print('generated: $websocket');
             		e.setSocket(websocket,request,(msg,sm,ws,req){
-            			print('emiting!');
             			wsreq.socket = ws;
             			wsreq.message = msg;
-						sm.emit(wsreq);
+						      sm.emit(wsreq);
         			});
 				}).catchError((e){
 					wsreq.error = e;
 					this.errors.emit(wsreq);
 				});
-				return;
+				return null;
 	  		}
 
 	  		if(!!this.httpHandle(request)){

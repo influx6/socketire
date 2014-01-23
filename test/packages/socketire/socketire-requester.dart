@@ -1,9 +1,8 @@
-
 part of socketire;
 
 class SocketireRequestHelper{
 
-	static Function matchRequest(Regexp match,[Function run]){
+	static Function matchRequest(RegExp match,[Function run]){
 		return (HttpRequest r){
 			if(run != null) return run(r,match);
 			return match.hasMatch(r.uri.path);
@@ -52,7 +51,7 @@ class RequestSpecs{
 
 	Function get checker => this._checker;
 
-	Streamable get stream => this._stream;
+	sm.Streamable get stream => this._stream;
 
 	String get namespace => this._namespace;
 

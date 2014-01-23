@@ -5,7 +5,7 @@ import 'package:socketire/socketire-server.dart';
 
 void main(){
 
-	var socket = Socketire.createFrom(HttpServer.bind('127.0.0.1',3000),
+	var socket = SocketireServer.createFrom(HttpServer.bind('127.0.0.1',3000),
 		SocketireRequestHelper.matchRequest(new RegExp(r'^/ws')));
 
 	var index = new File('./web/index.html');
@@ -51,10 +51,6 @@ void main(){
 		});
 
 		socket.stream('ws').on((r){
-
-			print('socketire : ${r}');
-			if(!r.isSocket) return;
-
 			print('socket message: ${r.message}');
 
 			r.socketSend('user#Welcome to users!');

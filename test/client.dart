@@ -1,5 +1,7 @@
 library socketire.spec;
 
+import 'dart:async';
+import 'dart:html';
 import 'package:socketire/socketire-client.dart';
 
 void main(){
@@ -9,21 +11,7 @@ void main(){
 	socket.space('ws',(mesg){
 		print('receving: $mesg');
 		return true;
-	});
-
-	socket.enableReconnect();
-
-	socket.stream('ws').on((req){
-		print(req);
-		// req.send('worth it');
-		print('running!');
-	});
-
-	socket.errors.on((e){
-		print('socket errors: $e');
-	});
-
-	socket.spec('ws').whenOpen.on((_){
+	}).whenOpen.on((_){
 
 		print('ready to rumble: $_:${_.socket}');
 		_.send('sucker');
@@ -33,5 +21,20 @@ void main(){
 
 	});
 
+	socket.enableReconnect();
+
+	socket.stream('ws').on((req){
+		print(req);
+		//req.send('worth it');
+		print('running!');
+	});
+
+	socket.errors.on((e){
+		//e.error.listen((n){ print(n); });
+		print('socket errors');
+	});
+
 	socket.connect('ws');
+
+
 }
