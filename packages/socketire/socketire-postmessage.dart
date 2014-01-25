@@ -13,7 +13,7 @@ class SocketirePostMessage{
 	dynamic root;
 	dynamic iframePortal;
 
-	static create(m,[id]) => new SocketirePostMessage(m,);
+	static create(m,[id]) => new SocketirePostMessage(m,id);
 
 	SocketirePostMessage(this.root,[String iframeId,bool catchExceptions]){
 		this.options.add('id',(iframeId == null ? 'networkFrame' : iframeId));
@@ -55,7 +55,7 @@ class SocketirePostMessage{
 	}
 
 	void bindErrorStream(){
-		this.root.addEventListener('error',function(e){
+		this.root.addEventListener('error',(e){
 			this.send(e.data,e);
 		});
 	}

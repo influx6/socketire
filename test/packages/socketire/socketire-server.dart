@@ -44,6 +44,10 @@ class WebSocketRequestServer extends WebSocketRequest{
 	void httpSend(dynamic data){
 		if(!this.isHttp) return;
 		this.request.response.write(data);
+		this.endRequest();
+	}
+
+	void endRequest(){
 		this.request.response.close();
 	}
 
@@ -101,6 +105,12 @@ class SocketireServer{
 		return stream.stream;
 	}
 
+	sm.Streamable request(String space,RegExp e){
+		if(this.subspace.has(space)) return this.stream(space);
+		this.space(space,SocketireRequestHelper.matchRequest(e));
+		return this.stream(space);
+	}
+
 	void render(String space,HttpRequest r){
 		if(!this.subspace.has(space)) return null;
 		this.stream(space).emit(r);
@@ -134,7 +144,7 @@ class SocketireServer{
             		e.setSocket(websocket,request,(msg,sm,ws,req){
             			wsreq.socket = ws;
             			wsreq.message = msg;
-						      sm.emit(wsreq);
+						sm.emit(wsreq);
         			});
 				}).catchError((e){
 					wsreq.error = e;

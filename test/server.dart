@@ -53,8 +53,18 @@ void main(){
 		socket.stream('ws').on((r){
 			print('socket message: ${r.message}');
 
-			r.socketSend('user#Welcome to users!');
-			r.socketSend('awaiting');
+			if(r.message == 'hi'){
+				r.socketSend('0');
+				r.socketSend('hello client!');
+			}
+			if(r.message == 'data'){
+				r.socketSend('1');
+				r.socketSend("here's the details request: { name: chicken}");
+			}
+			if(r.message == 'thanks'){
+				r.socketSend('2');
+				r.socketSend('you welcome bye!');
+			}
 		});
 	
 
