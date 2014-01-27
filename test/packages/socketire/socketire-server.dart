@@ -258,6 +258,7 @@ class SocketireServer{
 
   	RequestSpecs getMatched(req,Function n,[Function m]){
   		Hub.eachSyncMap(this.subspace.storage,(e,i,o,fn){
+  			print('checker: $e : ${req.uri} : ${e.checker(req)}');
   			if(e.checker(req)) return n(e);
   			fn(false);
 		},(o){

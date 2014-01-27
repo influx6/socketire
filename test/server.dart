@@ -13,7 +13,7 @@ void main(){
 	var client = new RegExp(r'client.dart');
 
 
-	socket..request('/',new RegExp(r'^/&'))
+	socket..request('home',new RegExp(r'^/home'))
 	..requestFS('assets',new RegExp(r'^/assets'),'./test')
 	..request('posts',new RegExp(r'^/posts'))
 	..request('ws',new RegExp(r'^/ws'));
@@ -46,7 +46,7 @@ void main(){
 
 		});
 
-		socket.stream('/').on((r){
+		socket.stream('home').on((r){
 			if(!r.isHttp) return;
 			
 			r.headers('Content-Type','text/html');
