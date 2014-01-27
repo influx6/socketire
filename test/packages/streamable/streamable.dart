@@ -2,8 +2,6 @@
 
 import 'package:ds/ds.dart' as ds;
 import 'package:hub/hub.dart';
-import 'package:invocable/invocable.dart';
-import 'package:statemanager/statemanager.dart';
 
 abstract class Streamer<T>{
   void emit(T e);
@@ -24,9 +22,10 @@ abstract class Broadcast<T>{
   void add(T n) => this.propagate(n);
 }
 
-class Listener<T> extends ExtendableInvocable{
+class Listener<T>{
+  final info = Hub.createMapDecorator();
 
-  Listener(): super();
+  Listener();
 
   void emit(T a){}
   void pause(){}
@@ -133,19 +132,31 @@ class Streamable<T> extends Streamer<T>{
   final Distributor initd = Distributor.create('streamable-emitInitiation');
   final Distributor drained = Distributor.create('streamable-drainer');
   final Distributor closed = Distributor.create('streamable-close');
+  final Distributor beginSegment = Distributor.create('streamable-section');
+  final Distributor endSegment = Distributor.create('streamable-section');
+  final Distributor resumer = Distributor.create('streamable-resume');
+  final Distributor pauser = Distributor.create('streamable-pause');
   final Distributor listeners = Distributor.create('streamable-listeners');
   dynamic iterator;
-  StateManager state,pushState;
-  int max;
+  StateManager state,pushState,flush;
   
   static create([n]) => new Streamable(n);
 
   Streamable([int m]){
-    this.max = m;
+    if(m != null) this.streams.setMax(m);
     this.state = StateManager.create(this);
     this.pushState = StateManager.create(this);
+    this.flush = StateManager.create(this);
     this.iterator = this.streams.iterator;
+  
+    this.flush.add('yes', {
+      'allowed': (t,c){ return true; }
+    });
 
+    this.flush.add('no', {
+      'allowed': (t,c){ return false; }
+    });
+    
     this.pushState.add('strict', {
       'strict': (target,control){ return true; },
       'delayed': (target,control){ return false; },
@@ -197,11 +208,13 @@ class Streamable<T> extends Streamer<T>{
     }); 
     
     this.transformer.whenDone((n){
+      
       this.streams.add(n);
       this.push();
     });
     
     this.state.switchState('resumed');
+    this.flush.switchState('no');
     this.pushState.switchState("strict");
     
   }
@@ -211,10 +224,21 @@ class Streamable<T> extends Streamer<T>{
     clone.updateTransformerListFrom(this.transformer);
     return clone;
   }
-
+  
+  void setMax(int m){
+    this.streams.setMax(m);  
+  }
+  
   void emit(T e){    
-    if(e == null) return;
-    if(this.isFull || this.streamClosed) return;
+    if(e == null) return null;
+    
+    if(this.streamClosed) return null;  
+    
+    if(this.isFull){
+      if(this.flush.run('allowed')) this.streams.clear();
+      else return null;
+    }
+    
     this.initd.emit(e);
     this.transformer.emit(e);
   }
@@ -223,6 +247,16 @@ class Streamable<T> extends Streamer<T>{
     a.forEach((f){
       this.emit(f);
     });  
+  }
+  
+  void segmentBegin(){
+    this.beginSegment.emit(true);
+    return null;
+  }
+  
+  void segmentEnd(){
+    this.endSegment.emit(true);
+    return null;
   }
   
   void on(Function n){
@@ -299,12 +333,14 @@ class Streamable<T> extends Streamer<T>{
   
   void pause(){
     if(this.streamClosed) return;
-    this.state.switchState('paused');  
+    this.state.switchState('paused');
+    this.pauser.emit(this);
   }
   
   void resume(){
     if(this.streamClosed) return;
     this.state.switchState('resumed');
+    this.resumer.emit(this);
     this.push();
   }
  
@@ -351,12 +387,19 @@ class Streamable<T> extends Streamer<T>{
   }
   
   bool get isFull{
-    if(this.max == null) return false;
-    return this.streams.size >= this.max;
+    return this.streams.isDense();
+  }
+  
+  void enableFlushing(){
+    this.flush.switchState('yes');      
+  }
+  
+  void disableFlushing(){
+    this.flush.switchState('no');  
   }
   
   bool get pushDelayedEnabled{
-    return this.pushState.delayed();  
+    return this.pushState.run('delayed');  
   }
   
   bool get isEmpty{
@@ -364,23 +407,23 @@ class Streamable<T> extends Streamer<T>{
   }
   
   bool get streamClosed{
-    return this.state.closed();  
+    return this.state.run('closed');  
   }
 
   bool get streamClosing{
-    return this.state.closing();  
+    return this.state.run('closing');  
   }
   
   bool get streamPaused{
-    return this.state.paused();
+    return this.state.run('paused');
   }
   
   bool get streamResumed{
-    return this.state.resumed();
+    return this.state.run('resumed');
   }  
 
   bool get streamFiring{
-    return this.state.firing();
+    return this.state.run('firing');
   }
   
   bool get hasListeners{
@@ -410,6 +453,18 @@ class Subscriber<T> extends Listener<T>{
 
   Mutator get transformer => this.stream.transformer;
 
+  void setMax(int m){
+    this.stream.setMax(m);  
+  }
+
+  void enableFlushing(){
+    this.stream.enableFlushing(); 
+  }
+  
+  void disableFlushing(){
+    this.stream.disableFlushing();
+  }
+  
   void whenDrained(Function n){
     this.stream.whenDrained(n);
   }
@@ -452,12 +507,173 @@ class Subscriber<T> extends Listener<T>{
   }
   
   void closeAttributes(){
-    super.close();  
+    //does nothing - removed dynamic properties of invocable for dart2js compatibility
   }
   
   void close([bool n]){
     this.end(n);
   }
+}
+
+class GroupedStream{
+  final meta = new MapDecorator();
+  final Streamable data = Streamable.create();  
+  final Streamable end = Streamable.create();  
+  final Streamable begin = Streamable.create();
+  StateManager state;
+  StateManager delimited;
+  Streamable stream;
+   
+  static create() => new GroupedStream();
+  
+  GroupedStream(){
+    this.state = hub.StateManager.create(this);
+    this.delimited = hub.StateManager.create(this);
+    
+    this.delimited.add('yes', {
+      'allowed': (r,c){ return true; }
+    });
+ 
+    this.delimited.add('no', {
+      'allowed': (r,c){ return false; }
+    });
+    
+    this.state.add('lock', {
+      'ready': (r,c){ return false; }
+    });    
+    
+    this.state.add('unlock', {
+      'ready': (r,c){ return true;},
+    });
+    
+    this.begin.initd.on((n){
+      if(!this.state.run('ready')) this.data.resume();
+      this.state.switchState("lock");
+      this.data.pause();
+    });
+    
+    this.end.initd.on((n){
+      this.data.resume();
+      this.state.switchState("unlock");
+    });
+    
+    this.stream = MixedStreams.combineUnOrder([begin,data,end])((tg,cg){
+      return this.state.run('ready');
+    },null,(cur,mix,streams,ij){   
+      if(this.delimited.run('allowed')) return mix.emit(cur.join(this.meta.get('delimiter')));
+      return mix.emitMass(cur);
+    });
+    
+    this.setDelimiter('/');
+    this.delimited.switchState("no");
+    this.state.switchState("unlock");
+  }
+
+  void enableFlushing(){
+    this.stream.enableFlushing();  
+  }
+  
+  void disableFlushing(){
+    this.stream.disableFlushing();  
+  }
+  
+  void setMax(int m){
+    this.stream.setMax(m);  
+  }
+  
+  dynamic get dataTransformer => this.data.transformer;
+  dynamic get endGroupTransformer => this.end.transformer;
+  dynamic get beginGroupTransformer => this.begin.transformer;
+  dynamic get streamTransformer => this.stream.transformer;
+
+  dynamic get dataDrained => this.data.drained;
+  dynamic get endGroupDrained => this.end.drained;
+  dynamic get beginGroupDrained => this.begin.drained;
+  dynamic get streamDrained => this.stream.drained;
+
+  dynamic get dataInitd => this.data.initd;
+  dynamic get endGroupInitd => this.end.initd;
+  dynamic get beginGroupInitd => this.begin.initd;
+  dynamic get streamInitd => this.stream.initd;
+  
+  dynamic get dataClosed => this.data.closed;
+  dynamic get endGroupClosed => this.end.closed;
+  dynamic get beginGroupClosed => this.begin.closed;
+  dynamic get streamClosed => this.stream.closed;
+
+  dynamic get dataPaused => this.data.pauser;
+  dynamic get endGroupPaused => this.end.pauser;
+  dynamic get beginGroupPaused => this.begin.pauser;
+  dynamic get streamPaused => this.stream.pauser;
+
+  dynamic get dataResumed => this.data.resumer;
+  dynamic get endGroupResumed => this.end.resumer;
+  dynamic get beginGroupResumed => this.begin.resumer;
+  dynamic get streamResumed => this.stream.resumer;
+
+  void whenDrained(Function n){
+    this.stream.whenDrained(n);  
+  }
+  
+  void whenClosed(Function n){
+    this.stream.whenClosed(n);  
+  }
+  
+  void whenInitd(Function n){
+    this.stream.whenInitd(n);  
+  }
+  
+  void setDelimiter(String n){
+    this.meta.destroy('delimiter');
+    this.meta.add('delimiter', n);
+  }
+  
+  void enableDelimiter(){
+    this.delimited.switchState('yes');
+  }
+  
+  void disableDelimiter(){
+    this.delimited.switchState("no");
+  }
+  
+  dynamic metas(String key,[dynamic value]){
+    if(value == null) return this.meta.get(key);
+    this.meta.add(key,value);
+  }
+
+  void beginGroup([group]){
+    this.begin.emit(group);
+  }
+
+  void endGroup([group]){
+    this.end.emit(group);
+  }
+  
+  void emit(data){
+    this.data.emit(data);
+  }
+  
+  void emitMass(List a){
+    this.data.emitMass(a);  
+  }
+  
+  void pause(){
+    this.stream.pause();
+  }
+  
+  void resume(){
+    this.stream.resume();
+  }
+  
+  void on(Function n){
+    this.stream.on(n);  
+  }
+  
+  void off(Function n){
+    this.stream.off(n);
+  }
+  
+  bool get hasConnections => this.stream.hasListeners;
 }
 
 

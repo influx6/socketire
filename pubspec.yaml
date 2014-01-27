@@ -4,10 +4,8 @@ author: Alexander Ewetumo<trinoxf@gmail.com>
 description: A simple collection of client and server side websocket wrapper
 homepage: http://github.com/influx6/socketire.dart
 dependencies:
-  ds: any
-  hub: any
-  invocable: any
-  statemanager: any
-  streamable: any
   browser: any
-
+  ds: any
+  guardedfs: any
+  hub: any
+  streamable: any

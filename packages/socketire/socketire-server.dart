@@ -4,16 +4,15 @@ import 'dart:io';
 import 'dart:async';
 import 'package:hub/hub.dart';
 import 'package:streamable/streamable.dart' as sm;
+import 'package:/guardedfs/guardedfs.dart';
 
 part 'socketire-requester.dart';
 
 class RequestSpecsServer extends RequestSpecs{
 
-
 	static create(s,f) => new RequestSpecsServer(s,f);
 
 	RequestSpecsServer(String space,Function handle): super(space,handle);
-
 
 	void setSocket(socket,request,Function m){
 		this._socket = socket;
@@ -30,11 +29,94 @@ class RequestSpecsServer extends RequestSpecs{
 
 }
 
+class FSRequestSpecServer extends RequestSpecsServer{
+	final sm.Streamable states = sm.Streamable.create();
+	GuardedFS fs;
+
+	static create(s,f,n,w) => new FSRequestSpecServer(s,f,n,w);
+
+	FSRequestSpecServer(String space,Function handle,String path,bool readonly): super(space,handle){
+		this.fs = GuardedFS.create(path,readonly);
+		this.states.setMax(100);
+	}
+
+	void listDirectory([bool recursive]){
+		this.fs.directoryListsAsString().then((_){
+			this.stream.emit(n);
+			this.states.emit({'path':'.','state':true,'method':'listDirectory'});
+		});
+	}
+
+	void readFile(String name){
+		var file = this.fs.File(name);
+		file.exists().then((exist){
+		  if(!!exist) 
+		  file.readAsString().then((data){
+		  	this.stream.emit(data);
+			this.states.emit({'path':file.path,'state':true,'method':'readFile'});
+		  }).catchError((e){
+			this.states.emit({'path':file.path,'state':false,'method':'readFile','error': e});
+		  });
+		});
+	}
+
+	void createFile(String name,dynamic data){
+		if(!this.fs.isWritable) return this.states.emit({'path':name,'method':'createFile','data':data,'state':false});
+		var file = this.fs.File(name);
+		file.writeAsString().then((f){
+			this.states.emit({'path':file.path,'state':true});
+		}).catchError((e){
+			this.states.emit({'path':name,'method':'createFile','data':data,'state':false,'error': e});
+		});
+	}
+
+	void appendFile(String name,dynamic data){
+		if(!this.fs.isWritable) return this.states.emit({'path':name,'method':'appendFile','data':data,'state':false});
+		var file = this.fs.File(name);
+		file.appendAsString().then((f){
+			this.states.emit({'path':file.path,'state':true,'method':'appendFile'});
+		}).catchError((e){
+			this.states.emit({'path':file.path,'method':'appendFile','data':data,'state':false,'error': e});
+		});
+	}
+
+	void destroyFile(String name){
+		if(!this.fs.isWritable) 
+			return this.states.emit({'path':name,'method':'destroyFile','data':data,'state':false});
+		var file = this.fs.File(name);
+		file.exists().then((exist){
+		  if(!!exist) 
+		  file.delete().then((data){
+		  	this.stream.emit(data);
+			this.states.emit({'path':file.path,'state':true,'method':'destroyFile'});
+		  }).catchError((e){
+				this.states.emit({'path':name,'method':'destroyFile','data':data,'state':false,'error': e});
+		  });
+		});
+	}
+
+	void exists(String name){
+		var file = this.fs.File(name);
+		file.exists().then((exist){
+		  if(!!exist) 
+		  file.readAsString().then((data){
+		  	this.stream.emit({'file':file.path,'exists':true});
+			this.states.emit({'path':file.path,'state':true,'method':'exists'});
+		  }).catchError((e){
+			this.states.emit({'path':file.path,'state':false,'method':'exists','error': e});
+		  });
+		});
+	}
+}
+
 class WebSocketRequestServer extends WebSocketRequest{
+	RequestSpecs spec;
 
-	static create(s,c,r) => new WebSocketRequestServer(s,c,r);
+	static create(s,c,r,[e]) => new WebSocketRequestServer(s,c,r,e);
 
-	WebSocketRequestServer(s,c,r): super(s,c,r);
+	WebSocketRequestServer(s,c,r,[e]): super(s,c,r){
+		this.spec = e;
+	}
 
 	void headers(tag,value){
 		if(!this.isHttp) return;
@@ -60,7 +142,6 @@ class WebSocketRequestServer extends WebSocketRequest{
 	bool get isHttp => this.socket == null && this.request != null;
 
 }
-
 
 class SocketireServer{
 	final subspace = Hub.createMapDecorator();
@@ -94,6 +175,11 @@ class SocketireServer{
 	  this.subspace.add(space,RequestSpecsServer.create(space,matcher));
 	}
 
+	void fsSpace(String space,String path,Function matcher,[bool writa]){
+	  if(this.subspace.has(space)) throw "Namespace $space already in used!";
+	  this.subspace.add(space,FSRequestSpecServer.create(space,matcher,path,writa));
+	}
+
 	RequestSpecsServer spec(String space){
 		if(!this.subspace.has(space)) return null;
 		return this.subspace.get(space);
@@ -111,6 +197,11 @@ class SocketireServer{
 		return this.stream(space);
 	}
 
+	sm.Streamable requestFS(String space,RegExp e,String path,[bool m]){
+		if(this.subspace.has(space)) return this.stream(space);
+		this.fsSpace(space,path,SocketireRequestHelper.matchRequest(e),m);
+		return this.stream(space);
+	}
 	void render(String space,HttpRequest r){
 		if(!this.subspace.has(space)) return null;
 		this.stream(space).emit(r);
@@ -136,6 +227,9 @@ class SocketireServer{
   		this.info.emit(wsreq);
 
   		var handler = this.getMatched(request,(e){
+
+  			print('request: ${request.uri}: $e : ${wsreq} : ${wsreq.spec}');
+  			wsreq.spec  = e;
 
 	  		if(!!this.socketHandle(request)){
 	  			if(e.hasSocket) return e.closeSocket();

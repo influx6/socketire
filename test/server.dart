@@ -13,10 +13,10 @@ void main(){
 	var client = new RegExp(r'client.dart');
 
 
-	socket..space('user',SocketireRequestHelper.matchRequest(new RegExp(r'^/user')))
-	..space('assets',SocketireRequestHelper.matchRequest(new RegExp(r'^/assets')))
-	..space('posts',SocketireRequestHelper.matchRequest(new RegExp(r'^/posts')))
-	..space('ws',SocketireRequestHelper.matchRequest(new RegExp(r'^/ws')));
+	socket..request('/',new RegExp(r'^/&'))
+	..requestFS('assets',new RegExp(r'^/assets'),'./test')
+	..request('posts',new RegExp(r'^/posts'))
+	..request('ws',new RegExp(r'^/ws'));
 
 	socket.errors.on((r){
 		r.httpSend('Not Found!');
@@ -31,17 +31,22 @@ void main(){
 
 		socket.stream('assets').on((r){
 
-			var path = r.request.uri.path;				
-			var ast = path.replaceAll('/assets','.');
+			print('assert request');
+			print(r);
+			print(r.spec);
+			print(r.request.uri.path);
 
-			var asset = new File(ast);
-			return asset.readAsString().then((content){
-				r.httpSend(content);
-			});
+			// var path = r.request.uri.path;				
+			// var ast = path.replaceAll('/assets','.');
+
+			// var asset = new File(ast);
+			// return asset.readAsString().then((content){
+			// 	r.httpSend(content);
+			// });
 
 		});
 
-		socket.stream('user').on((r){
+		socket.stream('/').on((r){
 			if(!r.isHttp) return;
 			
 			r.headers('Content-Type','text/html');
