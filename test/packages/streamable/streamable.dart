@@ -137,8 +137,9 @@ class Streamable<T> extends Streamer<T>{
   final Distributor resumer = Distributor.create('streamable-resume');
   final Distributor pauser = Distributor.create('streamable-pause');
   final Distributor listeners = Distributor.create('streamable-listeners');
-  dynamic iterator;
   StateManager state,pushState,flush;
+  dynamic iterator;
+  Function _ender;
   
   static create([n]) => new Streamable(n);
 
@@ -217,6 +218,16 @@ class Streamable<T> extends Streamer<T>{
     this.flush.switchState('no');
     this.pushState.switchState("strict");
     
+    this._ender = (){
+      this.state.switchState('closed');
+      this.drained.emit(true);
+      this.closed.emit(true);
+      this.closed.free();
+      this.drained.lock();
+      this.closed.lock();
+//      this.reset();
+    };
+    
   }
 
   Mutator cloneTransformer(){
@@ -286,7 +297,11 @@ class Streamable<T> extends Streamer<T>{
   }
   
   void pushDelayed(){
-
+    if((!this.hasListeners && this.streamClosing) || (this.streamClosing && this.streams.isEmpty)){
+      this._ender();
+      return null;
+    }
+    
     if(!this.hasListeners || this.streams.isEmpty || this.streamFiring || this.streamPaused || this.streamClosed) return null;
 
     if(this.streams.isEmpty && !this.streamClosing) return null;
@@ -297,12 +312,7 @@ class Streamable<T> extends Streamer<T>{
       this.listeners.emit(this.streams.removeHead().data);
     
     if(this.streamClosing && this.streams.isEmpty){
-      this.state.switchState('closed');
-      this.drained.emit(true);
-      this.closed.emit(true);
-      this.closed.free();
-      this.drained.lock();
-      this.closed.lock();
+      this._ender();
       return null;
     }else this.push();
     
@@ -311,14 +321,16 @@ class Streamable<T> extends Streamer<T>{
   }
   
   void pushStrict(){
-        
+    
+    if((!this.hasListeners && this.streamClosing) || (this.streamClosing && this.streams.isEmpty)){
+      this._ender();
+      return null;
+    }
+    
     if(!this.hasListeners || this.streams.isEmpty || this.streamFiring || this.streamPaused || this.streamClosed) return null;
     
     if(this.streamClosing){
-      this.state.switchState('closed');
-      this.drained.emit(true);
-      this.closed.emit(true);
-      this.reset();
+      this._ender();
       return null;
     }  
     
@@ -373,6 +385,7 @@ class Streamable<T> extends Streamer<T>{
   void end(){
     if(this.streamClosed) return null;
     this.state.switchState('closing');
+    this.push();
     this.initd.lock();
   }
   

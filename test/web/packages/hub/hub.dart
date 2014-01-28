@@ -949,6 +949,11 @@ class Hub{
     return m;
   }
 
+  static dynamic when(bool f,Function n,[Function m]){
+    if(!!f) return n();
+    return (m != null && m());
+  }
+
 	static final symbolMatch = new RegExp(r'\(|Symbol|\)');
 	
 	static dynamic throwNoSuchMethodError(Invocation n,Object c){

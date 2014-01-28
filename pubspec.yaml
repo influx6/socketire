@@ -9,3 +9,4 @@ dependencies:
   guardedfs: any
   hub: any
   streamable: any
+  path: any

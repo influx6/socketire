@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 import 'package:hub/hub.dart';
+import 'package:path/path.dart' as paths;
 import 'package:streamable/streamable.dart' as sm;
 
 class GuardedFile{
@@ -12,7 +13,7 @@ class GuardedFile{
 	static create(n,m) => new GuardedFile(path:n,readonly:m);
 
 	GuardedFile({String path, bool readonly: false}){
-		this.options = new MapDecorator.from({'readonly': readonly, 'path':path});
+		this.options = new MapDecorator.from({'readonly': readonly, 'path':paths.normalize(path)});
 		this.f = new File(this.options.get('path'));
 		this.writable = Switch.create();
 		if(!readonly) this.writable.switchOn();
@@ -68,7 +69,7 @@ class GuardedFile{
 	}
 
 	Future readAsString([Encoding enc]){
-		return this.f.readAsString(encoding: enc);
+		return this.f.readAsString(encoding: Hub.switchUnless(enc, UTF8));
 	}
 
 	dynamic readAsStringSync([Encoding enc]){
@@ -146,6 +147,7 @@ class GuardedFile{
 	dynamic get lengthSync => this.f.lengthSync();
 
 	bool get isWritable => this.writable.on();
+	bool get isFile => true;
 }
 
 class GuardedDirectory{
@@ -157,7 +159,7 @@ class GuardedDirectory{
 	static create(n,m) => new GuardedDirectory(path:n,readonly:m);
 	
 	GuardedDirectory({String path, bool readonly: false}){
-    this.options = new MapDecorator.from({'readonly':readonly, 'path':path});
+    this.options = new MapDecorator.from({'readonly':readonly, 'path':paths.normalize(path)});
 		this.d = new Directory(this.options.get('path'));
 		this.writable = Switch.create();
 		if(!readonly) this.writable.switchOn();
@@ -175,7 +177,7 @@ class GuardedDirectory{
 	}
 	  
 	dynamic File(String path){
-	    var root = this.options.get('path') + path;
+	    var root = paths.join(this.options.get('path'),path);
 	    return GuardedFile.create(root, this.options.get('readonly'));
 	}
   
@@ -191,13 +193,15 @@ class GuardedDirectory{
 	    var transformed = sm.Streamable.create();
 	    var fn = Hub.switchUnless(transform, (_){ return _; }); 
 	    transformed.transformer.on((n){ return n.path; });
-	    this.list(rec,ff).listen(transformed.emit);
+	    this.list(rec,ff).listen(transformed.emit,onDone:(){ 
+	    	transformed.end(); 
+	    });
 	    return transformed;
 	}
 	 
-  sm.Streamable directoryListsAsString([bool rec,bool ff]){
+  	sm.Streamable directoryListsAsString([bool rec,bool ff]){
     return this.directoryLists((o){ return o.path;},rec,ff); 
-  }
+  	}
   
 	Future rename(String name){
 		if(!this.writable.on()) return null;
@@ -210,12 +214,14 @@ class GuardedDirectory{
 	}
 
 	Future createNewDir(String name,[bool r]){
-    	var dir = GuardedDirectory.create((this.d.path+(name)),this.options.get('readonly'));
+	    var root = paths.join(this.options.get('path'),name);
+    	var dir = GuardedDirectory.create(root,this.options.get('readonly'));
     	return dir.createDir(r).then((j){ return dir; });
 	}
 
 	dynamic createNewDirSync(String name,[bool r]){
-		var dir = GuardedDirectory.create((this.d.path+(name)),this.options.get('readonly'));
+	    var root = paths.join(this.options.get('path'),name);
+		var dir = GuardedDirectory.create(root,this.options.get('readonly'));
 		dir.createDirSync(r);
 		return dir;
 	}
@@ -258,6 +264,9 @@ class GuardedDirectory{
 
 	bool get isWritable => this.writable.on();
 
+	String get path => this.d.path;
+
+	bool get isDirectory => true;
 }
 
 
@@ -305,4 +314,7 @@ class GuardedFS{
        return _.directoryListsAsString(rec,ff);
     });	
   }
+	
+	bool get isWritable => this.dir.isWritable;
+	
 }

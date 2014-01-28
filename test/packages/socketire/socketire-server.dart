@@ -3,8 +3,9 @@ library socketire;
 import 'dart:io';
 import 'dart:async';
 import 'package:hub/hub.dart';
+import 'package:path/path.dart' as paths;
 import 'package:streamable/streamable.dart' as sm;
-import 'package:/guardedfs/guardedfs.dart';
+import 'package:guardedfs/guardedfs.dart';
 
 part 'socketire-requester.dart';
 
@@ -29,87 +30,133 @@ class RequestSpecsServer extends RequestSpecs{
 
 }
 
+class FileRequestSpecServer extends RequestSpecsServer{
+	GuardedFile file;
+
+	static create(s,f,n) => new FileRequestSpecServer(s,f);
+
+	FileRequestSpecServer(String space,Function handle,String path){
+		this.file = GuardedFile.create(path.normalize(path),true);
+	}
+
+	dynamic readAsString() => this.file.readAsString();
+
+	dynamic stat() => this.file.stat();
+}
+
 class FSRequestSpecServer extends RequestSpecsServer{
 	final sm.Streamable states = sm.Streamable.create();
 	GuardedFS fs;
+	String point;
+	dynamic root;
 
 	static create(s,f,n,w) => new FSRequestSpecServer(s,f,n,w);
 
 	FSRequestSpecServer(String space,Function handle,String path,bool readonly): super(space,handle){
-		this.fs = GuardedFS.create(path,readonly);
+		this.point = path;
+		this.fs = GuardedFS.create(paths.normalize(paths.join(path,'.')),readonly);
 		this.states.setMax(100);
+		this.root = paths.normalize(paths.join(path,'..'));
+	}
+
+
+	bool validatePath(String path){
+		if(paths.isWithin(this.root,path) || this.root == paths.normalize(path)) return true;
+		return false;
+	}
+
+	bool isRootDirectory(String path){
+		var root = paths.normalize(paths.join(path,'.'));
+		if(root == this.root || root == '.' || root == './') return true;
+		return false;
 	}
 
 	void listDirectory([bool recursive]){
-		this.fs.directoryListsAsString().then((_){
-			this.stream.emit(n);
-			this.states.emit({'path':'.','state':true,'method':'listDirectory'});
+		this.states.emit({'path':'.','state':true,'method':'listDirectory'});
+		return this.fs.directoryListsAsString();
+	}
+
+	void get(String path,Function dir,Function file){
+		if(FileSystemEntity.typeSync(path) == FileSystemEntityType.FILE || FileSystemEntity.typeSync(path) == FileSystemEntityType.LINK) 
+			return file(this.readFile(path));
+		if(FileSystemEntity.typeSync(path) == FileSystemEntityType.DIRECTORY) return dir(this.getDirectoryLists(path));
+	}
+
+	dynamic getDirectory(String path,[bool recursive]){
+		return this.fs.Dir(paths.normalize(path));
+	}
+
+	dynamic getDirectoryLists(String path,[bool recursive]){
+		return this.getDirectory(path,recursive).then((_){
+			return _.directoryListsAsString();
 		});
 	}
 
-	void readFile(String name){
+	dynamic readFile(String name){
+		if(!this.validatePath(paths.normalize(paths.join(this.point,name)))) return null;
 		var file = this.fs.File(name);
-		file.exists().then((exist){
-		  if(!!exist) 
-		  file.readAsString().then((data){
-		  	this.stream.emit(data);
-			this.states.emit({'path':file.path,'state':true,'method':'readFile'});
-		  }).catchError((e){
-			this.states.emit({'path':file.path,'state':false,'method':'readFile','error': e});
-		  });
+		return file.exists().then((exist){
+		  if(!exist) throw "File Not Exists";
+		  this.states.emit({'path':file.path,'state':true,'method':'readFile'});
+		  return file.readAsString();
 		});
+
 	}
 
-	void createFile(String name,dynamic data){
+	Future createFile(String name,dynamic data){
+		if(!this.validatePath(paths.normalize(paths.join(this.point,name)))) return null;
 		if(!this.fs.isWritable) return this.states.emit({'path':name,'method':'createFile','data':data,'state':false});
 		var file = this.fs.File(name);
-		file.writeAsString().then((f){
+		return file.writeAsString().then((f){
 			this.states.emit({'path':file.path,'state':true});
 		}).catchError((e){
 			this.states.emit({'path':name,'method':'createFile','data':data,'state':false,'error': e});
 		});
 	}
 
-	void appendFile(String name,dynamic data){
+	Future appendFile(String name,dynamic data){
+		if(!this.validatePath(paths.normalize(paths.join(this.point,name)))) return null;
 		if(!this.fs.isWritable) return this.states.emit({'path':name,'method':'appendFile','data':data,'state':false});
 		var file = this.fs.File(name);
-		file.appendAsString().then((f){
-			this.states.emit({'path':file.path,'state':true,'method':'appendFile'});
-		}).catchError((e){
-			this.states.emit({'path':file.path,'method':'appendFile','data':data,'state':false,'error': e});
+		return file.exists().then((exist){
+		  	if(!exist) throw "File Not Exists";
+			return file.appendAsString().then((f){
+				this.states.emit({'path':file.path,'state':true,'method':'appendFile'});
+				return f;
+			}).catchError((e){
+				this.states.emit({'path':file.path,'method':'appendFile','data':data,'state':false,'error': e});
+			});
 		});
 	}
 
-	void destroyFile(String name){
+	Future destroyFile(String name){
+		if(!this.validatePath(paths.normalize(paths.join(this.point,name)))) return null;
 		if(!this.fs.isWritable) 
 			return this.states.emit({'path':name,'method':'destroyFile','data':data,'state':false});
 		var file = this.fs.File(name);
-		file.exists().then((exist){
-		  if(!!exist) 
-		  file.delete().then((data){
-		  	this.stream.emit(data);
+		return file.exists().then((exist){
+		  if(!exist) throw "File Not Exists";
+		  return file.delete().then((f){
 			this.states.emit({'path':file.path,'state':true,'method':'destroyFile'});
+			return f;
 		  }).catchError((e){
 				this.states.emit({'path':name,'method':'destroyFile','data':data,'state':false,'error': e});
 		  });
 		});
 	}
 
-	void exists(String name){
+	Future exists(String name){
+		if(!this.validatePath(paths.normalize(paths.join(this.point,name)))) return null;
 		var file = this.fs.File(name);
-		file.exists().then((exist){
-		  if(!!exist) 
-		  file.readAsString().then((data){
-		  	this.stream.emit({'file':file.path,'exists':true});
-			this.states.emit({'path':file.path,'state':true,'method':'exists'});
-		  }).catchError((e){
-			this.states.emit({'path':file.path,'state':false,'method':'exists','error': e});
-		  });
+		return file.exists().then((exist){
+		  this.state.emit({'file':file.path,'method':'exits',state:exist});
+		  return exist;
 		});
 	}
 }
 
 class WebSocketRequestServer extends WebSocketRequest{
+	final options = Hub.createMapDecorator();
 	RequestSpecs spec;
 
 	static create(s,c,r,[e]) => new WebSocketRequestServer(s,c,r,e);
@@ -129,18 +176,51 @@ class WebSocketRequestServer extends WebSocketRequest{
 		this.endRequest();
 	}
 
+	void httpWrite(dynamic data){
+		if(!this.isHttp) return;
+		this.request.response.write(data);
+	}
+
 	void endRequest(){
 		this.request.response.close();
 	}
 
 	void socketSend(dynamic data){
-		//if(!this.isSocket) return;
+		if(!this.isSocket) return;
 		print('sending socket data: $data');
 		this.socket.add(data);
 	}
 
 	bool get isHttp => this.socket == null && this.request != null;
 
+}
+
+class StaticRequestHelpers{
+
+	static Function fsTransformer(Function pathCleaner,Function requestCleaner){
+		return (r){
+
+			var ast = pathCleaner(r);
+			r.options.add('valid',r.spec.validatePath(ast));
+			r.options.add('isRootDirectory',r.spec.isRootDirectory(ast));
+			r.options.add('realPath',ast);
+
+			r.options.add('handler',(s,m){
+					var future = new Completer(), list = [];
+
+					//clean up the paths for return 
+					m.on((k){ 
+						list.add(requestCleaner(k)); 
+					});
+					//close and complete future
+					m.whenClosed((_){ future.complete(list); });
+
+					return future.future;
+			});
+
+			return r;
+		};
+	}
 }
 
 class SocketireServer{
@@ -180,6 +260,11 @@ class SocketireServer{
 	  this.subspace.add(space,FSRequestSpecServer.create(space,matcher,path,writa));
 	}
 
+	void fileSpace(String space,String path,Function matcher){
+	  if(this.subspace.has(space)) throw "Namespace $space already in used!";
+	  this.subspace.add(space,FileRequestSpecServer.create(space,matcher,path));
+	}
+
 	RequestSpecsServer spec(String space){
 		if(!this.subspace.has(space)) return null;
 		return this.subspace.get(space);
@@ -200,8 +285,16 @@ class SocketireServer{
 	sm.Streamable requestFS(String space,RegExp e,String path,[bool m]){
 		if(this.subspace.has(space)) return this.stream(space);
 		this.fsSpace(space,path,SocketireRequestHelper.matchRequest(e),m);
+		var stream = this.stream(space);
 		return this.stream(space);
 	}
+
+	sm.Streamable requestFile(String space,RegExp e,String path){
+		if(this.subspace.has(space)) return this.stream(space);
+		this.fileSpace(space,path,SocketireRequestHelper.matchRequest(e),m);
+		return this.stream(space);
+	}
+
 	void render(String space,HttpRequest r){
 		if(!this.subspace.has(space)) return null;
 		this.stream(space).emit(r);
@@ -228,7 +321,6 @@ class SocketireServer{
 
   		var handler = this.getMatched(request,(e){
 
-  			print('request: ${request.uri}: $e : ${wsreq} : ${wsreq.spec}');
   			wsreq.spec  = e;
 
 	  		if(!!this.socketHandle(request)){
@@ -258,7 +350,6 @@ class SocketireServer{
 
   	RequestSpecs getMatched(req,Function n,[Function m]){
   		Hub.eachSyncMap(this.subspace.storage,(e,i,o,fn){
-  			print('checker: $e : ${req.uri} : ${e.checker(req)}');
   			if(e.checker(req)) return n(e);
   			fn(false);
 		},(o){

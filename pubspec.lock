@@ -12,12 +12,16 @@ packages:
   guardedfs:
     description: guardedfs
     source: hosted
-    version: "0.0.3"
+    version: "0.0.9"
   hub:
     description: hub
     source: hosted
-    version: "0.5.2"
+    version: "0.5.3"
+  path:
+    description: path
+    source: hosted
+    version: "1.0.0"
   streamable:
     description: streamable
     source: hosted
-    version: "0.1.1"
+    version: "0.1.2"
