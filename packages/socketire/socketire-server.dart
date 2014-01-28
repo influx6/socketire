@@ -77,9 +77,10 @@ class FSRequestSpecServer extends RequestSpecsServer{
 	}
 
 	void get(String path,Function dir,Function file){
-		if(FileSystemEntity.typeSync(path) == FileSystemEntityType.FILE || FileSystemEntity.typeSync(path) == FileSystemEntityType.LINK) 
+		var point = paths.normalize(paths.join(this.point,path));
+		if(FileSystemEntity.typeSync(point) == FileSystemEntityType.FILE || FileSystemEntity.typeSync(point) == FileSystemEntityType.LINK) 
 			return file(this.readFile(path));
-		if(FileSystemEntity.typeSync(path) == FileSystemEntityType.DIRECTORY) return dir(this.getDirectoryLists(path));
+		if(FileSystemEntity.typeSync(point) == FileSystemEntityType.DIRECTORY) return dir(this.getDirectoryLists(path));
 	}
 
 	dynamic getDirectory(String path,[bool recursive]){
