@@ -9,16 +9,15 @@ import 'package:streamable/streamable.dart' as sm;
 
 void main(){
 
-	var socket = SocketireServer.createFrom(HttpServer.bind('127.0.0.1',3000),
-		SocketireRequestHelper.matchRequest(new RegExp(r'^/ws')));
+	var socket = SocketireServer.createFrom(HttpServer.bind('127.0.0.1',3000));
 
-	var index = new File(paths.normalize('./test/web/index.html'));
-	var testReg = new RegExp(r'^test|\\test\\');
-	var dotReg = new RegExp(r'..');
+	socket.initGuardedFS('.');
 
-	socket..request('/',new RegExp(r'^/$'))
+	var testReg = new RegExp(r'^test');
+
+	socket..requestFile('/',new RegExp(r'^/$'),'./test/web/index.html')
+	..requestFile('posts',new RegExp(r'^/posts'),'./test/web/post.html')
 	..requestFS('assets',new RegExp(r'^/assets'),'./test')
-	..request('posts',new RegExp(r'^/posts'))
 	..request('ws',new RegExp(r'^/ws'));
 
 	socket.errors.on((r){
@@ -32,19 +31,14 @@ void main(){
 
 	socket.ready().then((_){
 
-
 		socket.stream('assets').transformer.on(StaticRequestHelpers.fsTransformer((r){
-			var root = r.request.uri.path.replaceAll('/assets','.');
-			return  root;
+			return r.request.uri.path.replaceAll('/assets','.');
 		},(path){
-			var root = paths.normalize(path.replaceAll('..','').replaceAll(testReg,'').replaceFirst('\\',''));
-			return paths.normalize(paths.join('/assets',root));
+			return paths.join('/assets',path.replaceAll(testReg,''));
 		}));
 
 		socket.stream('assets').on((r){
-			print('root directory :${r.options}');
-
-			if(!r.options.get('isRootDirectory')) return;
+			if(!r.options.get('isRootDirectory')) return null;
 				return r.spec.listDirectory().then((_){
 
 					r.headers('Content-Type','text/html');
@@ -83,24 +77,13 @@ void main(){
 
 		});
 
+		socket.stream('/').on(StaticRequestHelpers.renderFileRequest((r,d){
+			r.httpSend(d);
+		}));
 
-
-		socket.stream('/').on((r){
-			if(!r.isHttp) return;
-			
-			r.headers('Content-Type','text/html');
-			index.readAsString().then((c){
-				r.httpSend(c);
-			});
-		});
-
-
-		socket.stream('posts').on((r){
-			if(!r.isHttp) return;
-			
-			r.headers('Content-Type','text/html');
-			r.httpSend('Welcome to Posts!');
-		});
+		socket.stream('posts').on(StaticRequestHelpers.renderFileRequest((r,d){
+			r.httpSend(d);
+		}));
 
 		socket.stream('ws').on((r){
 			print('socket message: ${r.message}');

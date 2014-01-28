@@ -33,11 +33,9 @@ class RequestSpecsServer extends RequestSpecs{
 class FileRequestSpecServer extends RequestSpecsServer{
 	GuardedFile file;
 
-	static create(s,f,n) => new FileRequestSpecServer(s,f);
+	static create(fs,s,f,n) => new FileRequestSpecServer(fs,s,f,n);
 
-	FileRequestSpecServer(String space,Function handle,String path){
-		this.file = GuardedFile.create(path.normalize(path),true);
-	}
+	FileRequestSpecServer(this.file,String space,Function handle,String path): super(space,handle);
 
 	dynamic readAsString() => this.file.readAsString();
 
@@ -194,6 +192,10 @@ class WebSocketRequestServer extends WebSocketRequest{
 
 	bool get isHttp => this.socket == null && this.request != null;
 
+	String toString(){
+		if(this.request != null) return this.request.uri.path;
+	}
+
 }
 
 class StaticRequestHelpers{
@@ -205,13 +207,15 @@ class StaticRequestHelpers{
 			r.options.add('valid',r.spec.validatePath(ast));
 			r.options.add('isRootDirectory',r.spec.isRootDirectory(ast));
 			r.options.add('realPath',ast);
+			r.options.add('originalPath',r.request.uri.path);
 
 			r.options.add('handler',(s,m){
 					var future = new Completer(), list = [];
 
 					//clean up the paths for return 
 					m.on((k){ 
-						list.add(requestCleaner(k)); 
+						var cleaned = paths.normalize(k.replaceAll('..','').replaceFirst('\\',''));
+						list.add(paths.normalize(requestCleaner(cleaned)));
 					});
 					//close and complete future
 					m.whenClosed((_){ future.complete(list); });
@@ -222,31 +226,47 @@ class StaticRequestHelpers{
 			return r;
 		};
 	}
+
+	static void renderFileRequest([Function n,Function socket]){
+		return (WebSocketRequestServer r){
+			if(r.spec is FileRequestSpecServer && r.isHttp){
+				r.spec.readAsString().then((data){
+					if(r.isHttp && n != null) return n(r,data);
+					if(r.isSocket && socket != null) return socket(r,data);
+				});
+			};
+		};
+	}
 }
 
 class SocketireServer{
 	final subspace = Hub.createMapDecorator();
 	final sm.Streamable errors = sm.Streamable.create();
 	final sm.Streamable info = sm.Streamable.create();
+	GuardedFs fs;
 	Completer _ready = new Completer();
 	Function socketHandle,httpHandle;
 	HttpServer s;
 	Future serverFuture;
 	WebSocket socket;
   	
-  	static create(addr,port,n,[s,k]) => new SocketireServer(addr,port,n,s,k);
-  	static createFrom(f,n,[h,k]) => new SocketireServer.fromServer(f,n,h,k);
+  	static create(addr,port,[n,s,k]) => new SocketireServer(addr,port,n,s,k);
+  	static createFrom(f,[n,h,k]) => new SocketireServer.fromServer(f,n,h,k);
 	
-	SocketireServer(String addr,num port,Function sh,[Function hh,Function err]){
-		this.socketHandle = sh;
+	SocketireServer(String addr,num port,[Function sh,Function hh,Function err]){
+		this.socketHandle = (sh != null ? sh : SocketireRequestHelper.matchRequest(new RegExp(r'^/ws')));
 		this.httpHandle = (hh == null ? (r){ return true; } : hh);
 		this.serverFuture = HttpSever.bind(addr,port);
 		this._setup(err);
 	}
 	
-	SocketireServer.fromServer(Future<HttpSever> binder,Function sh,[Function hh,Function err]){
+	void initGuardedFS(String path){
+		this.fs = GuardedFS.create(paths.normalize(path),true);
+	}
+
+	SocketireServer.fromServer(Future<HttpSever> binder,[Function sh,Function hh,Function err]){
 		this.serverFuture = binder;
-		this.socketHandle = sh;
+		this.socketHandle = (sh != null ? sh : SocketireRequestHelper.matchRequest(new RegExp(r'^/ws')));
 		this.httpHandle = (hh == null ? (r){ return true; } : hh);
 		this._setup(err);
 	}
@@ -263,7 +283,7 @@ class SocketireServer{
 
 	void fileSpace(String space,String path,Function matcher){
 	  if(this.subspace.has(space)) throw "Namespace $space already in used!";
-	  this.subspace.add(space,FileRequestSpecServer.create(space,matcher,path));
+	  this.subspace.add(space,FileRequestSpecServer.create(this.fs.File(paths.normalize(path)),space,matcher,path));
 	}
 
 	RequestSpecsServer spec(String space){
@@ -292,8 +312,16 @@ class SocketireServer{
 
 	sm.Streamable requestFile(String space,RegExp e,String path){
 		if(this.subspace.has(space)) return this.stream(space);
-		this.fileSpace(space,path,SocketireRequestHelper.matchRequest(e),m);
-		return this.stream(space);
+		this.fileSpace(space,path,SocketireRequestHelper.matchRequest(e));
+		var stream = this.stream(space);
+		return stream;
+	}
+
+	sm.streamable applyFSTransformer(String space,Function pre,Function post){
+		var stream = this.stream(space);
+		if(stream == null) return null;
+		stream.transformer.on(StaticRequestHelpers.fsTransformer(pre,post));
+		return stream;
 	}
 
 	void render(String space,HttpRequest r){
