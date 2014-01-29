@@ -1,4 +1,4 @@
-library socketire.server;
+library socketire;
 
 import 'dart:io';
 import 'dart:async';
@@ -112,14 +112,14 @@ class FSRequestSpecServer extends RequestSpecsServer{
 
 	Future createFile(String name,dynamic data){
 		if(!this.validatePath(paths.normalize(paths.join(this.point,name)))) return null;
-		if(!this.fs.isWritable) return this.states.emit({'path':name,'method':'createFile','data':data,'state':false});
+		if(!this.fs.isWritable) return null;
 		var file = this.fs.File(name);
 		return file.writeAsString(data);
 	}
 
 	Future appendFile(String name,dynamic data){
 		if(!this.validatePath(paths.normalize(paths.join(this.point,name)))) return null;
-		if(!this.fs.isWritable) return;
+		if(!this.fs.isWritable) return null;
 		var file = this.fs.File(name);
 		return file.exists().then((exist){
 		  	if(!exist) throw "File Not Exists";
@@ -129,7 +129,7 @@ class FSRequestSpecServer extends RequestSpecsServer{
 
 	Future destroyFile(String name){
 		if(!this.validatePath(paths.normalize(paths.join(this.point,name)))) return null;
-		if(!this.fs.isWritable) return;
+		if(!this.fs.isWritable) return null;
 		var file = this.fs.File(name);
 		return file.exists().then((exist){
 		  if(!exist) throw "File Not Exists";
@@ -222,7 +222,7 @@ class StaticRequestHelpers{
 		};
 	}
 
-	static void renderFileRequest([Function n,Function socket]){
+	static dynamic renderFileRequest([Function n,Function socket]){
 		return (WebSocketRequestServer r){
 			if(r.spec is FileRequestSpecServer && r.isHttp){
 				r.spec.readAsString().then((data){
@@ -238,7 +238,7 @@ class SocketireServer{
 	final subspace = Hub.createMapDecorator();
 	final sm.Streamable errors = sm.Streamable.create();
 	final sm.Streamable info = sm.Streamable.create();
-	GuardedFs fs;
+	GuardedFS fs;
 	Completer _ready = new Completer();
 	Function socketHandle,httpHandle;
 	HttpServer s;
@@ -251,7 +251,7 @@ class SocketireServer{
 	SocketireServer(String addr,num port,[Function sh,Function hh,Function err]){
 		this.socketHandle = (sh != null ? sh : SocketireRequestHelper.matchRequest(new RegExp(r'^/ws')));
 		this.httpHandle = (hh == null ? (r){ return true; } : hh);
-		this.serverFuture = HttpSever.bind(addr,port);
+		this.serverFuture = HttpServer.bind(addr,port);
 		this._setup(err);
 	}
 	
@@ -259,7 +259,7 @@ class SocketireServer{
 		this.fs = GuardedFS.create(paths.normalize(path),true);
 	}
 
-	SocketireServer.fromServer(Future<HttpSever> binder,[Function sh,Function hh,Function err]){
+	SocketireServer.fromServer(Future<HttpServer> binder,[Function sh,Function hh,Function err]){
 		this.serverFuture = binder;
 		this.socketHandle = (sh != null ? sh : SocketireRequestHelper.matchRequest(new RegExp(r'^/ws')));
 		this.httpHandle = (hh == null ? (r){ return true; } : hh);
@@ -312,7 +312,7 @@ class SocketireServer{
 		return stream;
 	}
 
-	sm.streamable applyFSTransformer(String space,Function pre,Function post){
+	sm.Streamable applyFSTransformer(String space,Function pre,Function post){
 		var stream = this.stream(space);
 		if(stream == null) return null;
 		stream.transformer.on(StaticRequestHelpers.fsTransformer(pre,post));

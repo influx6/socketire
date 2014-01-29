@@ -7,7 +7,7 @@ import 'package:streamable/streamable.dart' as sm;
 part 'helpers.dart';
 
 class SocketirePostMessage{
-	final MapDecorator options = hub.createMapDecorator();
+	final MapDecorator options = Hub.createMapDecorator();
 	sm.Streamable errMessages,outMessages,inMessages;
 	dynamic root;
 	dynamic iframePortal;

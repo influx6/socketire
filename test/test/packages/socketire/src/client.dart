@@ -1,4 +1,4 @@
-library socketire.client;
+library socketire;
 
 import 'dart:async';
 import 'dart:html';
