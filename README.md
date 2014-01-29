@@ -1,5 +1,5 @@
 #Socketire
-	Provides a simplified http server depending upon condition provided or using the default can switch a request to a websocket request or server as a standard http request,its a simplified httpserver wrapper with a basic file server and directory server,nothing fancy.Also provides a client implementation for websocket and a client side postMessage wrapper
+	Provides a simplified http server depending upon condition provided or using the default can switch a request to a websocket request or serve as a standard http request,its a simplified httpserver wrapper with a basic file server and directory server,nothing fancy.Also provides a client implementation for websocket and a client side postMessage wrapper
 
 ##Examples
 	library socketire.spec;
@@ -18,7 +18,11 @@
 
 		socket..requestFile('/',new RegExp(r'^/$'),'./test/assets/index.html')
 		..requestFile('posts',new RegExp(r'^/posts'),'./test/assets/post.html')
+
+		//preferably choose to server the file path as the same name as the namespace
+		// else you would need to use the transformer to fix paths change from assets/index.html to test/index.html,see example below
 		..requestFS('assets',new RegExp(r'^/assets'),'./test')
+
 		..request('ws',new RegExp(r'^/ws'));
 
 		socket.errors.on((r){
@@ -31,7 +35,7 @@
 		});
 
 		socket.ready().then((_){
-
+			//need to handle the switch of request like assets/index.html to test/index.html and vise-versal
 			socket.stream('assets').transformer.on(StaticRequestHelpers.fsTransformer((r){
 				return r.request.uri.path.replaceFirst('/assets','.');
 			},(path){
