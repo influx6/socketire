@@ -1,4 +1,4 @@
-part of socketire.helpers;
+part of socketire;
 
 class SocketireRequestHelper{
 
