@@ -1,11 +1,8 @@
 library socketire.spec;
 
-import 'dart:async';
-import 'package:hub/hub.dart';
 import 'package:path/path.dart' as paths;
 import 'dart:io';
-import 'package:socketire/socketire-server.dart';
-import 'package:streamable/streamable.dart' as sm;
+import 'package:socketire/server.dart';
 
 void main(){
 
@@ -15,8 +12,8 @@ void main(){
 
 	var testReg = new RegExp(r'^test');
 
-	socket..requestFile('/',new RegExp(r'^/$'),'./test/web/index.html')
-	..requestFile('posts',new RegExp(r'^/posts'),'./test/web/post.html')
+	socket..requestFile('/',new RegExp(r'^/$'),'./test/assets/index.html')
+	..requestFile('posts',new RegExp(r'^/posts'),'./test/assets/post.html')
 	..requestFS('assets',new RegExp(r'^/assets'),'./test')
 	..request('ws',new RegExp(r'^/ws'));
 
@@ -32,14 +29,15 @@ void main(){
 	socket.ready().then((_){
 
 		socket.stream('assets').transformer.on(StaticRequestHelpers.fsTransformer((r){
-			return r.request.uri.path.replaceAll('/assets','.');
+			return r.request.uri.path.replaceFirst('/assets','.');
 		},(path){
-			return paths.join('/assets',path.replaceAll(testReg,''));
+			return  paths.join('/assets',path.replaceAll(testReg,''));
 		}));
 
 		socket.stream('assets').on((r){
 			if(!r.options.get('isRootDirectory')) return null;
 				return r.spec.listDirectory().then((_){
+					if(_ is Exception) return r.httpSend('Resource Not Found (404)!');
 
 					r.headers('Content-Type','text/html');
 					var data = new List.from(['<ul>']);
@@ -61,6 +59,7 @@ void main(){
 
 				r.spec.get(r.options.get('realPath'),(dir){
 					dir.then((_){
+
 						r.headers('Content-Type','text/html');
 						var data = new List.from(['<ul>']);
 						r.options.get('handler')(r,_).then((list){
@@ -70,9 +69,12 @@ void main(){
 							data.add('</ul>');
 							r.httpSend(data.join(''));
 						});
+						
 					});
 				},(file){
 					file.then(r.httpSend);
+				},(e){
+					return r.httpSend('Resource Not Found (404)!');
 				});
 
 		});

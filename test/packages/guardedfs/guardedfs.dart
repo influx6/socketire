@@ -13,7 +13,7 @@ class GuardedFile{
 	static create(n,m) => new GuardedFile(path:n,readonly:m);
 
 	GuardedFile({String path, bool readonly: false}){
-		this.options = new MapDecorator.from({'readonly': readonly, 'path':paths.normalize(path)});
+		this.options = new MapDecorator.from({'readonly': readonly, 'path':path});
 		this.f = new File(this.options.get('path'));
 		this.writable = Switch.create();
 		if(!readonly) this.writable.switchOn();
@@ -159,7 +159,7 @@ class GuardedDirectory{
 	static create(n,m) => new GuardedDirectory(path:n,readonly:m);
 	
 	GuardedDirectory({String path, bool readonly: false}){
-    this.options = new MapDecorator.from({'readonly':readonly, 'path':paths.normalize(path)});
+    this.options = new MapDecorator.from({'readonly':readonly, 'path':path});
 		this.d = new Directory(this.options.get('path'));
 		this.writable = Switch.create();
 		if(!readonly) this.writable.switchOn();
@@ -293,7 +293,7 @@ class GuardedFS{
 	dynamic Dir(String path,[bool rec]){
 		if(this.cache.storage.length > 100) this.cache.flush();
 		var dir = this.cache.get(path);
-		if(dir != null && dir is GuardedDirectory) return dir; 
+		if(dir != null && dir is GuardedDirectory) return new Future.value(dir); 
 		dir = this.dir.createNewDir(path,rec);
 		return dir.then((_){
 		   this.cache.add(path,_);

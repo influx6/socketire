@@ -1,8 +1,8 @@
 name: socketire
-version: 0.0.2
 author: Alexander Ewetumo<trinoxf@gmail.com>
-description: A simple collection of client and server side websocket wrapper
+version: 0.0.6
 homepage: http://github.com/influx6/socketire.dart
+description: A simple collection of client and server side websocket wrapper
 dependencies:
   browser: any
   ds: any

@@ -2,7 +2,7 @@ library socketire.spec;
 
 import 'dart:async';
 import 'dart:html';
-import 'package:socketire/socketire-client.dart';
+import 'package:socketire/client.dart';
 
 void main(){
 

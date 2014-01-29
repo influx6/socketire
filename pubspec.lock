@@ -12,11 +12,11 @@ packages:
   guardedfs:
     description: guardedfs
     source: hosted
-    version: "0.0.9"
+    version: "0.1.1"
   hub:
     description: hub
     source: hosted
-    version: "0.5.3"
+    version: "0.5.6"
   path:
     description: path
     source: hosted
