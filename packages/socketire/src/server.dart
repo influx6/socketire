@@ -59,6 +59,16 @@ class FSRequestSpecServer extends RequestSpecsServer{
 		this.root = paths.normalize(paths.join(path,'..'));
 	}
 
+	void mapToHex(List n,Function m){
+		var hex = new List();
+		Hub.eachAsync(n,(e,i,o,fn){
+			if(e is int) hex.add(e.toRadixString(36));
+			else hex.add(e);
+			fn(false);
+		},(o){
+			m(hex);
+		});
+	}
 
 	bool validatePath(String path){
 		// if(_rootReg.hasMatch(path) || path == '/') return true;
@@ -117,6 +127,9 @@ class FSRequestSpecServer extends RequestSpecsServer{
 		  },onError:(e){
 		  	file.readAsBytes().then((d){ 
 		  		data.complete(d); 
+		  		// this.mapToHex(d,(h){
+			  	// 	data.complete(h); 
+		  		// });
 		  	});
 	  	  });
 
@@ -205,7 +218,7 @@ class WebSocketRequestServer extends WebSocketRequest{
 	bool get isHttp => this.socket == null && this.request != null;
 
 	String toString(){
-		if(this.request != null) return this.request.uri.path;
+		if(this.request != null) return "Method: ${this.request.method} : Path: ${this.request.uri}";
 	}
 
 }

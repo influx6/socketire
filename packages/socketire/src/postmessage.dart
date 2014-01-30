@@ -10,7 +10,7 @@ class SocketirePostMessage{
 	final MapDecorator options = Hub.createMapDecorator();
 	sm.Streamable errMessages,outMessages,inMessages;
 	dynamic root;
-	dynamic iframePortal;
+	// dynamic iframePortal;
 
 	static create(m,[id]) => new SocketirePostMessage(m,id);
 
@@ -21,10 +21,10 @@ class SocketirePostMessage{
 		this.outMessages = sm.Streamable.create();
 		this.inMessages = sm.Streamable.create();
 		this.errMessages = sm.Streamable.create();
-		this.iframePortal = new IFrameElement();
+		// this.iframePortal = new IFrameElement();
 
-		if(iframeId != null) 
-			this.iframePortal.setAttribute('id',this.options.get('id'));
+		// if(iframeId != null) 
+		// 	this.iframePortal.setAttribute('id',this.options.get('id'));
 			
 		this.init();
 	}
