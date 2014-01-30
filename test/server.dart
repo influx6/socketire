@@ -26,6 +26,7 @@ void main(){
 		else print('#log $r');
 	});
 
+	//should be called before calling socket.ready
 	socket.initd.on((bb){
 
 			socket.stream('assets').transformer.on(StaticRequestHelpers.fsTransformer((r){
@@ -116,7 +117,7 @@ void main(){
 	socket.ready(HttpServer.bind('127.0.0.1',3000)).then((f){
 
 		print('socket server: $f');
-		
+
 	});
 
 
