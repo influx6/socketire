@@ -42,8 +42,11 @@ class FileRequestSpecServer extends RequestSpecsServer{
 	dynamic stat() => this.file.stat();
 }
 
+var _rootReg = new RegExp(r'(\.+\/\.*)$');
+
 class FSRequestSpecServer extends RequestSpecsServer{
 	GuardedFS fs;
+	Regexp pathChecker;
 	String point;
 	dynamic root;
 
@@ -51,17 +54,20 @@ class FSRequestSpecServer extends RequestSpecsServer{
 
 	FSRequestSpecServer(String space,Function handle,String path,bool readonly): super(space,handle){
 		this.point = path;
+		this.pathChecker = new RegExp('^'+path.replaceFirst('..',''));
 		this.fs = GuardedFS.create(paths.normalize(paths.join(path,'.')),readonly);
 		this.root = paths.normalize(paths.join(path,'..'));
 	}
 
 
 	bool validatePath(String path){
-		if(paths.isWithin(this.root,path) || this.root == paths.normalize(path)) return true;
+		// if(_rootReg.hasMatch(path) || path == '/') return true;
+		if(paths.isWithin(this.root,path) || this.root == paths.normalize(path) || this.pathChecker.hasMatch(path)) return true;
 		return false;
 	}
 
 	bool isRootDirectory(String path){
+		// if(_rootReg.hasMatch(path) || path == '/') return true;
 		var root = paths.normalize(paths.join(path,'.'));
 		if(root == this.root || root == '.' || root == './') return true;
 		return false;
@@ -105,7 +111,16 @@ class FSRequestSpecServer extends RequestSpecsServer{
 		var file = this.fs.File(name);
 		return file.exists().then((exist){
 		  if(!exist) throw "File Not Exists";
-		  return file.readAsString();
+		  var data = new Completer();
+		  var stringfuture = file.readAsString().then((d){
+		  	data.complete(d);
+		  },onError:(e){
+		  	file.readAsBytes().then((d){ 
+		  		data.complete(d); 
+		  	});
+	  	  });
+
+		  return data.future;
 		});
 
 	}
@@ -176,7 +191,6 @@ class WebSocketRequestServer extends WebSocketRequest{
 
 	void socketSend(dynamic data){
 		if(!this.isSocket) return;
-		print('sending socket data: $data');
 		this.socket.add(data);
 	}
 
@@ -193,9 +207,17 @@ class StaticRequestHelpers{
 	static Function fsTransformer(Function pathCleaner,Function requestCleaner){
 		return (r){
 
-			var ast = pathCleaner(r);
-			r.options.add('valid',r.spec.validatePath(ast));
-			r.options.add('isRootDirectory',r.spec.isRootDirectory(ast));
+			var ast = pathCleaner(r).toString();
+
+
+			if(_rootReg.hasMatch(ast) || ast == '/'){
+				r.options.add('valid',true);
+				r.options.add('isRootDirectory',true);
+			}else{
+				r.options.add('valid',r.spec.validatePath(ast));
+				r.options.add('isRootDirectory',r.spec.isRootDirectory(ast));
+			}
+
 			r.options.add('realPath',ast);
 			r.options.add('originalPath',r.request.uri.path);
 
@@ -319,8 +341,9 @@ class SocketireServer{
 		return stream;
 	}
 
-	void render(String space,HttpRequest r){
+	void render(String space,WebSocketRequestServer r){
 		if(!this.subspace.has(space)) return null;
+		r.spec = this.spec(space);
 		this.stream(space).emit(r);
 	}
 
@@ -364,6 +387,7 @@ class SocketireServer{
 	  		}
 
 	  		if(!!this.httpHandle(request)){
+	  			wsreq.request = request;
 	  			return e.stream.emit(wsreq);
 	  		}
 

@@ -19,6 +19,10 @@ class GuardedFile{
 		if(!readonly) this.writable.switchOn();
 	}
   
+	Future fsCheck(String path){
+		return new Future.value((FileSystemEntity.typeSync(path) == FileSystemEntityType.NOT_FOUND ? new Exception('NOT FOUND!') : path));
+	}
+
 	Future rename(String name){
 		if(!this.writable.on()) return null;
 		return this.f.rename(name);
@@ -165,6 +169,10 @@ class GuardedDirectory{
 		if(!readonly) this.writable.switchOn();
 	}
 
+	Future fsCheck(String path){
+		return new Future.value((FileSystemEntity.typeSync(path) == FileSystemEntityType.NOT_FOUND ? new Exception('NOT FOUND!') : path));
+	}
+
 	dynamic createDirSync([bool f]){
 	    if(!this.writable.on() && !this.d.existsSync()) return null;
 	    this.d.create(recursive: Hub.switchUnless(f, true));
@@ -281,6 +289,10 @@ class GuardedFS{
 		this.dir = GuardedDirectory.create(path,readonly);
 	}
 
+	Future fsCheck(String path){
+		return new Future.value((FileSystemEntity.typeSync(path) == FileSystemEntityType.NOT_FOUND ? new Exception('NOT FOUND!') : path));
+	}
+	
 	dynamic File(String path){
 		if(this.cache.storage.length > 100) this.cache.flush();
 		var dir = this.cache.get(path);
