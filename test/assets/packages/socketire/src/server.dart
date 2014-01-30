@@ -129,7 +129,14 @@ class FSRequestSpecServer extends RequestSpecsServer{
 		if(!this.validatePath(paths.normalize(paths.join(this.point,name)))) return null;
 		if(!this.fs.isWritable) return null;
 		var file = this.fs.File(name);
-		return file.writeAsString(data);
+		var data = new Completer();
+		file.writeAsString(data).then((file){
+			data.complete(file);
+		},onError:(e){
+			file.writeAsBytes(data).then((file){ data.complete(file); });
+		});
+
+		return data.future;
 	}
 
 	Future appendFile(String name,dynamic data){
@@ -260,32 +267,26 @@ class SocketireServer{
 	final subspace = Hub.createMapDecorator();
 	final sm.Streamable errors = sm.Streamable.create();
 	final sm.Streamable info = sm.Streamable.create();
-	GuardedFS fs;
-	Completer _ready = new Completer();
+	final sm.Distributor initd = sm.Distributor.create('initd');
+	final options = Hub.createMapDecorator();
 	Function socketHandle,httpHandle;
-	HttpServer s;
+	Completer done;
 	Future serverFuture;
+	GuardedFS fs;
+	HttpServer s;
 	WebSocket socket;
   	
-  	static create(addr,port,[n,s,k]) => new SocketireServer(addr,port,n,s,k);
-  	static createFrom(f,[n,h,k]) => new SocketireServer.fromServer(f,n,h,k);
+  	static create([addr,port,n,s]) => new SocketireServer(addr,port,n,s);
 	
-	SocketireServer(String addr,num port,[Function sh,Function hh,Function err]){
-		this.socketHandle = (sh != null ? sh : SocketireRequestHelper.matchRequest(new RegExp(r'^/ws')));
+	SocketireServer([String addr,num port,Function sh,Function hh]){
+		this.socketHandle = (sh == null ? SocketireRequestHelper.matchRequest(new RegExp(r'^/ws')) : sh);
 		this.httpHandle = (hh == null ? (r){ return true; } : hh);
-		this.serverFuture = HttpServer.bind(addr,port);
-		this._setup(err);
-	}
-	
-	void initGuardedFS(String path){
-		this.fs = GuardedFS.create(paths.normalize(path),true);
+		this.options.add('addr',(addr == null ? '127.0.0.1' : addr));
+		this.options.add('port',(port == null ? 3000 : port));
 	}
 
-	SocketireServer.fromServer(Future<HttpServer> binder,[Function sh,Function hh,Function err]){
-		this.serverFuture = binder;
-		this.socketHandle = (sh != null ? sh : SocketireRequestHelper.matchRequest(new RegExp(r'^/ws')));
-		this.httpHandle = (hh == null ? (r){ return true; } : hh);
-		this._setup(err);
+	void initGuardedFS(String path){
+		this.fs = GuardedFS.create(paths.normalize(path),true);
 	}
 
 	void space(String space,Function matcher){
@@ -347,18 +348,32 @@ class SocketireServer{
 		this.stream(space).emit(r);
 	}
 
-	void _setup([Function err]){
-		this.serverFuture.then((server){
-			this.s = server;
-			server.listen(this.handleRequest,onError:(e){
-				if(err != null) return err(e);
-				throw e;
-			});
-			this._ready.complete(this);
-		});
-	}
+	SocketireServer ready([Future<HttpServer> s]){
+		
+		runZoned((){
+			
+			if(this.s != null) return this;
+			this.done = new Completer();
+			this.serverFuture = (s == null ? HttpServer.bind(this.options.get('addr'),this.options.get('port')) : s);
+			this.serverFuture.then((server){
+				this.s = server;
+				server.listen(this.handleRequest);
+				this.initd.emit(this);
+				this.done.complete(this);
 
-	Future ready() => this._ready.future;
+			},onError:(e){
+				this.errors.emit(e);
+				this.s = null;
+			});
+
+		},onError:(e){
+			this.errors.emit(e);
+			this.s = null;
+			this.ready();
+		});
+
+		return this.done;
+	}
 
   	void handleRequest(request){
   		if(this.subspace.storage.isEmpty) return;
@@ -371,7 +386,7 @@ class SocketireServer{
   			wsreq.spec  = e;
 
 	  		if(!!this.socketHandle(request)){
-	  			if(e.hasSocket) return e.closeSocket();
+	  			if(e.hasSocket) return;
 
 				WebSocketTransformer.upgrade(request).then((websocket){
             		e.setSocket(websocket,request,(msg,sm,ws,req){

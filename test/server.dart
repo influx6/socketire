@@ -6,7 +6,7 @@ import 'package:socketire/server.dart';
 
 void main(){
 
-	var socket = SocketireServer.createFrom(HttpServer.bind('127.0.0.1',3000));
+	var socket = SocketireServer.create();
 
 	socket.initGuardedFS('.');
 
@@ -26,84 +26,90 @@ void main(){
 		else print('#log $r');
 	});
 
-	socket.ready().then((_){
+	socket.ready(HttpServer.bind('127.0.0.1',3000));
+	
+	socket.initd.on((bb){
 
-		socket.stream('assets').transformer.on(StaticRequestHelpers.fsTransformer((r){
-			return r.request.uri.path.replaceFirst('/assets','.');
-		},(path){
-			return  paths.join('/assets',path.replaceAll(testReg,''));
-		}));
+			socket.stream('assets').transformer.on(StaticRequestHelpers.fsTransformer((r){
+					return r.request.uri.path.replaceFirst('/assets','.');
+				},(path){
+					return  paths.join('/assets',path.replaceAll(testReg,''));
+				}));
 
-		socket.stream('assets').on((r){
-			if(!r.options.get('isRootDirectory')) return null;
-				return r.spec.listDirectory().then((_){
-					if(_ is Exception) return r.httpSend('Resource Not Found (404)!');
+				socket.stream('assets').on((r){
+					if(r.isSocket) return;
 
-					r.headers('Content-Type','text/html');
-					var data = new List.from(['<ul>']);
-					r.options.get('handler')(r,_).then((list){
-						data.add('<li><a href="/">root</li>');
-						data.add('<li><a href=".">back</li>');
-						list.forEach((n){ 
-							data.add('<li><a href="$n">$n</li>'); 
-						});
-						data.add('</ul>');
-						r.httpSend(data.join(''));
+					if(!r.options.get('isRootDirectory')) return null;
+						return r.spec.listDirectory().then((_){
+							if(_ is Exception) return r.httpSend('Resource Not Found (404)!');
+
+							r.headers('Content-Type','text/html');
+							var data = new List.from(['<ul>']);
+							r.options.get('handler')(r,_).then((list){
+								data.add('<li><a href="/">root</li>');
+								data.add('<li><a href=".">back</li>');
+								list.forEach((n){ 
+									data.add('<li><a href="$n">$n</li>'); 
+								});
+								data.add('</ul>');
+								r.httpSend(data.join(''));
+							});
+
 					});
-
-			});
-		});
-
-		socket.stream('assets').on((r){
-			if(!r.options.get('valid') || r.options.get('isRootDirectory')) return;
-
-				r.spec.get(r.options.get('realPath'),(dir){
-					dir.then((_){
-
-						r.headers('Content-Type','text/html');
-						var data = new List.from(['<ul>']);
-						r.options.get('handler')(r,_).then((list){
-							data.add('<li><a href="/">root</li>');
-							data.add('<li><a href=".">back</li>');
-							list.forEach((n){ data.add('<li><a href="$n">$n</li>'); });
-							data.add('</ul>');
-							r.httpSend(data.join(''));
-						});
-						
-					});
-				},(file){
-					file.then(r.httpSend);
-				},(e){
-					return r.httpSend('Resource Not Found (404)!');
 				});
 
-		});
+				socket.stream('assets').on((r){
+					if(r.isSocket) return;
+					
+					if(!r.options.get('valid') || r.options.get('isRootDirectory')) return;
 
-		socket.stream('/').on(StaticRequestHelpers.renderFileRequest((r,d){
-			r.httpSend(d);
-		}));
+						r.spec.get(r.options.get('realPath'),(dir){
+							dir.then((_){
 
-		socket.stream('posts').on(StaticRequestHelpers.renderFileRequest((r,d){
-			r.httpSend(d);
-		}));
+								r.headers('Content-Type','text/html');
+								var data = new List.from(['<ul>']);
+								r.options.get('handler')(r,_).then((list){
+									data.add('<li><a href="/">root</li>');
+									data.add('<li><a href=".">back</li>');
+									list.forEach((n){ data.add('<li><a href="$n">$n</li>'); });
+									data.add('</ul>');
+									r.httpSend(data.join(''));
+								});
+								
+							});
+						},(file){
+							file.then(r.httpSend);
+						},(e){
+							return r.httpSend('Resource Not Found (404)!');
+						});
 
-		socket.stream('ws').on((r){
-			print('socket message: ${r.message}');
+				});
 
-			if(r.message == 'hi'){
-				r.socketSend('0');
-				r.socketSend('hello client!');
-			}
-			if(r.message == 'data'){
-				r.socketSend('1');
-				r.socketSend("here's the details request: { name: chicken}");
-			}
-			if(r.message == 'thanks'){
-				r.socketSend('2');
-				r.socketSend('you welcome bye!');
-			}
-		});
-	
+				socket.stream('/').on(StaticRequestHelpers.renderFileRequest((r,d){
+					r.httpSend(d);
+				}));
+
+				socket.stream('posts').on(StaticRequestHelpers.renderFileRequest((r,d){
+					r.httpSend(d);
+				}));
+
+				socket.stream('ws').on((r){
+					print('socket message: ${r.message}');
+					if(!r.isSocket) return;
+
+					if(r.message == 'hi'){
+						r.socketSend('0');
+						r.socketSend('hello client!');
+					}
+					if(r.message == 'data'){
+						r.socketSend('1');
+						r.socketSend("here's the details request: { name: chicken}");
+					}
+					if(r.message == 'thanks'){
+						r.socketSend('2');
+						r.socketSend('you welcome bye!');
+					}
+				});
 
 	});
 
