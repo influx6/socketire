@@ -198,6 +198,7 @@ class WebSocketRequestServer extends WebSocketRequest{
 
 	void socketSend(dynamic data){
 		if(!this.isSocket) return;
+		print('sending to $data');
 		this.socket.add(data);
 	}
 
@@ -270,7 +271,7 @@ class SocketireServer{
 	final sm.Distributor initd = sm.Distributor.create('initd');
 	final options = Hub.createMapDecorator();
 	Function socketHandle,httpHandle;
-	Completer done;
+	Completer done = new Completer();
 	Future serverFuture;
 	GuardedFS fs;
 	HttpServer s;
@@ -349,30 +350,31 @@ class SocketireServer{
 	}
 
 	SocketireServer ready([Future<HttpServer> s]){
-		
-		runZoned((){
-			
-			if(this.s != null) return this;
-			this.done = new Completer();
+		// runZoned((){
+				
+			if(this.s != null && this.done.isCompleted) return this.done.future;
+
+			this.done = (!!this.done.isCompleted ? this.done : new Completer());
 			this.serverFuture = (s == null ? HttpServer.bind(this.options.get('addr'),this.options.get('port')) : s);
 			this.serverFuture.then((server){
 				this.s = server;
 				server.listen(this.handleRequest);
 				this.initd.emit(this);
 				this.done.complete(this);
-
 			},onError:(e){
 				this.errors.emit(e);
+				this.done.completeError(e);
 				this.s = null;
 			});
 
-		},onError:(e){
-			this.errors.emit(e);
-			this.s = null;
-			this.ready();
-		});
+		// },onError:(e,s){
+		// 	print('gona error out: $e : $s');
+		// 	this.errors.emit(e);
+		// 	this.s = null;
+		// 	this.ready();
+		// });
 
-		return this.done;
+		return this.done.future;
 	}
 
   	void handleRequest(request){

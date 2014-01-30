@@ -26,8 +26,6 @@ void main(){
 		else print('#log $r');
 	});
 
-	socket.ready(HttpServer.bind('127.0.0.1',3000));
-	
 	socket.initd.on((bb){
 
 			socket.stream('assets').transformer.on(StaticRequestHelpers.fsTransformer((r){
@@ -86,10 +84,12 @@ void main(){
 				});
 
 				socket.stream('/').on(StaticRequestHelpers.renderFileRequest((r,d){
+					if(r.isSocket) return;
 					r.httpSend(d);
 				}));
 
 				socket.stream('posts').on(StaticRequestHelpers.renderFileRequest((r,d){
+					if(r.isSocket) return;
 					r.httpSend(d);
 				}));
 
@@ -112,6 +112,13 @@ void main(){
 				});
 
 	});
+
+	socket.ready(HttpServer.bind('127.0.0.1',3000)).then((f){
+
+		print('socket server: $f');
+		
+	});
+
 
 
 }
