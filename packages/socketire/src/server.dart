@@ -270,8 +270,9 @@ class SocketireServer{
 	final sm.Streamable info = sm.Streamable.create();
 	final sm.Distributor initd = sm.Distributor.create('initd');
 	final options = Hub.createMapDecorator();
+	final _alive = Switch.create();
 	Function socketHandle,httpHandle;
-	Completer done = new Completer();
+	Completer done;
 	Future serverFuture;
 	GuardedFS fs;
 	HttpServer s;
@@ -352,18 +353,20 @@ class SocketireServer{
 	SocketireServer ready([Future<HttpServer> s]){
 		// runZoned((){
 				
-			if(this.s != null && this.done.isCompleted) return this.done.future;
+			if(this._alive.on()) return this.done.future;
 
-			this.done = (!!this.done.isCompleted ? this.done : new Completer());
+			this.done = new Completer());
 			this.serverFuture = (s == null ? HttpServer.bind(this.options.get('addr'),this.options.get('port')) : s);
 			this.serverFuture.then((server){
 				this.s = server;
 				server.listen(this.handleRequest);
 				this.initd.emit(this);
 				this.done.complete(this);
+				this._alive.switchOn();
 			},onError:(e){
 				this.errors.emit(e);
 				this.done.completeError(e);
+				this._alive.SwitchOff();
 				this.s = null;
 			});
 
