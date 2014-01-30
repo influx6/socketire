@@ -112,7 +112,7 @@ class FSRequestSpecServer extends RequestSpecsServer{
 		return file.exists().then((exist){
 		  if(!exist) throw "File Not Exists";
 		  var data = new Completer();
-		  var stringfuture = file.readAsString().then((d){
+		  file.readAsString().then((d){
 		  	data.complete(d);
 		  },onError:(e){
 		  	file.readAsBytes().then((d){ 
