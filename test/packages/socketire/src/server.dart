@@ -355,7 +355,7 @@ class SocketireServer{
 				
 			if(this._alive.on()) return this.done.future;
 
-			this.done = new Completer());
+			this.done = new Completer();
 			this.serverFuture = (s == null ? HttpServer.bind(this.options.get('addr'),this.options.get('port')) : s);
 			this.serverFuture.then((server){
 				this.s = server;
@@ -364,15 +364,15 @@ class SocketireServer{
 				this.done.complete(this);
 				this._alive.switchOn();
 			},onError:(e){
-				this.errors.emit(e);
+				this.info.emit(e);
 				this.done.completeError(e);
-				this._alive.SwitchOff();
+				this._alive.switchOff();
 				this.s = null;
 			});
 
 		// },onError:(e,s){
 		// 	print('gona error out: $e : $s');
-		// 	this.errors.emit(e);
+		// this.info.emit(e);
 		// 	this.s = null;
 		// 	this.ready();
 		// });

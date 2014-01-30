@@ -18,7 +18,7 @@ void main(){
 	..request('ws',new RegExp(r'^/ws'));
 
 	socket.errors.on((r){
-		r.httpSend('Not Found!');
+		if(r is WebSocketRequestServer) r.httpSend('Not Found!');
 	});
 
 	socket.info.on((r){
