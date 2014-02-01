@@ -36,11 +36,12 @@
 		});
 
 		socket.info.on((r){
-			if(r is WebSocketRequestServer) print('#requesting ${r.request.uri}');
-			else print('#log $r');
+			print('#requesting ${r.request.uri}');
 		});
 
-		//should be called before calling socket.ready
+		//should be called before calling socket.ready if called after,it cant garanted firing incase if the server is created
+		//before even the call to socket.initd is called up, its done this way to allow re-initialization of your server settings
+		//even in cases of server failure or reboot when using runZones
 		socket.initd.on((bb){
 
 				//a necessecity to fix the conversion from assets to test name 
@@ -131,7 +132,17 @@
 
 		//the httpServer is optional and can be omitted,when omitted,socketire will simple create a server bound to 
 		// the local ip and at port 3000,unless if specifiied in the create constructor
-		socket.ready(HttpServer.bind('127.0.0.1',3000)).then((f){
+		//you can pass in a httpserver future to ready to use a custom server
+		/* i.e 
+			socket.ready(HttpServer.bind('127.0.0.1',3000)).then((f){
+
+				print('socket server: $f');
+
+			});
+
+		*/
+
+		socket.ready().then((f){
 
 			print('socket server: $f');
 

@@ -1,12 +1,13 @@
 library socketire.spec;
 
+
 import 'package:path/path.dart' as paths;
 import 'dart:io';
 import 'package:socketire/server.dart';
 
 void main(){
 
-	var socket = SocketireServer.create();
+	var socket = SocketireServer.create('127.0.0.1',3001);
 
 	socket.initGuardedFS('.');
 
@@ -22,8 +23,7 @@ void main(){
 	});
 
 	socket.info.on((r){
-		if(r is WebSocketRequestServer) print('#requesting ${r.request.uri}');
-		else print('#log $r');
+		print('#requesting ${r.request.uri}');
 	});
 
 	//should be called before calling socket.ready
@@ -95,7 +95,9 @@ void main(){
 				}));
 
 				socket.stream('ws').on((r){
+
 					print('socket message: ${r.message}');
+					
 					if(!r.isSocket) return;
 
 					if(r.message == 'hi'){
@@ -113,13 +115,22 @@ void main(){
 				});
 
 	});
+	
+	//you can pass in a httpserver future to ready to use a custom server
+	/* i.e 
+		socket.ready(HttpServer.bind('127.0.0.1',3000)).then((f){
 
-	socket.ready(HttpServer.bind('127.0.0.1',3000)).then((f){
+			print('socket server: $f');
+
+		});
+
+	*/
+
+	socket.ready().then((f){
 
 		print('socket server: $f');
 
 	});
-
 
 
 }

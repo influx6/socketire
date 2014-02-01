@@ -46,7 +46,7 @@ var _rootReg = new RegExp(r'(\.+\/\.*)$');
 
 class FSRequestSpecServer extends RequestSpecsServer{
 	GuardedFS fs;
-	Regexp pathChecker;
+	RegExp pathChecker;
 	String point;
 	dynamic root;
 
@@ -211,7 +211,7 @@ class WebSocketRequestServer extends WebSocketRequest{
 
 	void socketSend(dynamic data){
 		if(!this.isSocket) return;
-		print('sending to $data');
+		print('sending: $data');
 		this.socket.add(data);
 	}
 
@@ -311,7 +311,7 @@ class SocketireServer{
 
 	void fsSpace(String space,String path,Function matcher,[bool writa]){
 	  if(this.subspace.has(space)) throw "Namespace $space already in used!";
-	  this.subspace.add(space,FSRequestSpecServer.create(space,matcher,path,writa));
+	  this.subspace.add(space,FSRequestSpecServer.create(space,matcher,path,Hub.switchUnless(writa, true)));
 	}
 
 	void fileSpace(String space,String path,Function matcher){
@@ -363,7 +363,7 @@ class SocketireServer{
 		this.stream(space).emit(r);
 	}
 
-	SocketireServer ready([Future<HttpServer> s]){
+	Future ready([Future<HttpServer> s]){
 		// runZoned((){
 				
 			if(this._alive.on()) return this.done.future;
@@ -404,7 +404,7 @@ class SocketireServer{
   			wsreq.spec  = e;
 
 	  		if(!!this.socketHandle(request)){
-	  			if(e.hasSocket) return;
+	  			if(e.hasSocket) return null;
 
 				WebSocketTransformer.upgrade(request).then((websocket){
             		e.setSocket(websocket,request,(msg,sm,ws,req){

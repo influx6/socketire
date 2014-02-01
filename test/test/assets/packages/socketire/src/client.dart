@@ -10,20 +10,25 @@ part 'helpers.dart';
 class RequestSpecsClient extends RequestSpecs{
 	var whenOpen = Hub.createDistributor('whenOpen');
 	var whenSocketClosed = Hub.createDistributor('whenSocketClosed');
-
+	var routeSets = Hub.createMapDecorator();
 
 	static create(s,f) => new RequestSpecsClient(s,f);
 
-	RequestSpecsClient(String s,Function n): super(s,n);
+	RequestSpecsClient(String s,[Function n]): super(s,Hub.switchUnless(n,(m){ return true; })){
+		this.route('*');
+	}
 
-	void setSocket(socket,Function n){
+	void setSocket(socket){
 		this._socket = socket;
 		this._socket.onMessage.listen((msg){
-			print('word: $msg : ${this.checker(msg)}');
-			if(!this.checker(msg)) return null;
-			n(msg,this._socket,this);
+			if(!this.checker(msg)) return;
+			this.stream.emit(msg);
 		});
 		this.whenOpen.emit(this);
+	}
+
+	void sendTo(String r,dynamic m){
+		this.route(r).emit(m);
 	}
 
 	void send(data){
@@ -36,31 +41,27 @@ class RequestSpecsClient extends RequestSpecs{
 		super.closeSocket();
 	}
 
-}
+	Stream route(String r){
+		if(this.routeSets.has(r)) return this.routeSets.get(r);
+		this.routeSets.add(r,sm.Streamable.create());
+	}
 
-class WebSocketRequestClient extends WebSocketRequest{
-
-	static create(s,c) => new WebSocketRequestClient(s,c);
-
-	WebSocketRequestClient(s,m): super(s,m,null);
-
-	void send(data){
-		if(!this.isSocket) return;
-		this.socket.send(data);
+	void close(){
+		super.close();
+		this.routeSets.onAll((e){ e.close(); });
+		this.routeSets.flush();
 	}
 }
 
 class SocketireClient{
 	final sm.Streamable errors = sm.Streamable.create();
 	bool _reboot  = false;
-	String root;
 	int retrySeconds = 2;
 	var subspace,db, rebooter;
 
-	static create(m) => new SocketireClient(m);
+	static create() => new SocketireClient();
 
-	SocketireClient(String m){
-		this.root = m;
+	SocketireClient(){
 		this.subspace = Hub.createMapDecorator();
 	}
 
@@ -74,6 +75,13 @@ class SocketireClient{
 
 	bool get canReboot => !!this._reboot;
 
+	dynamic space(String nm,String space,[Function matcher]){
+	  if(this.subspace.has(nm)) return this.subspace.get(nm);
+	  var sub = RequestSpecsClient.create(space,matcher);
+	  this.subspace.add(nm,sub);
+	  return sub;
+	}
+
 	void send(String space,dynamic data){
 		if(!this.subspace.has(space)) return;
 		this.subspace.get(space).send(data);
@@ -84,30 +92,25 @@ class SocketireClient{
 		return this.subspace.get(space);
 	}
 
+	dynamic stream(String space){
+		if(!this.subspace.has(space)) return null;
+		return this.subspace.get(space).stream;
+	}
+
 	void connect(String space){
 		if(!this.subspace.has(space)) return;
 
-		print('initing');
 		var sub = this.subspace.get(space);
-		var full = this.root + '/' + space;
 
 		if(sub.hasSocket) sub.closeSocket();
 
 
-		var ws = new WebSocket(full);
+		var ws = new WebSocket(sub.namespace);
 		var retry = this.retrySeconds;
-
-		var wsreq = WebSocketRequestClient.create(ws,null);
-
-		print(ws.on);
 
 		ws.onOpen.listen((e){
 			retry = 2;
-			sub.setSocket(ws,(msg,socket,req){
-				wsreq.socket = socket;
-				wsreq.message = msg;
-				req.stream.emit(wsreq);
-			});
+			sub.setSocket(ws);
 		});
 
 		ws.onClose.listen((e){
@@ -119,22 +122,9 @@ class SocketireClient{
 		});
 
 		ws.onError.listen((e){
-			wsreq.error = e;
-			this.errors.emit(wsreq);
+			this.errors.emit({ 'target': space,'error': e});
 		});
 
-	}
-
-	dynamic space(String space,Function matcher){
-	  if(this.subspace.has(space)) return this.subspace.get(space);
-	  var sub = RequestSpecsClient.create(space,matcher);
-	  this.subspace.add(space,sub);
-	  return sub;
-	}
-
-	sm.Streamable stream(String space){
-		if(!this.subspace.has(space)) return null;
-		return this.subspace.get(space).stream;
 	}
 
 	void close(){
