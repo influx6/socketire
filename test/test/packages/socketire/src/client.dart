@@ -7,14 +7,14 @@ import 'package:streamable/streamable.dart' as sm;
 
 part 'helpers.dart';
 
-class RequestSpecsClient extends RequestSpecs{
+class ClientSocket extends RequestSpecs{
 	var whenOpen = Hub.createDistributor('whenOpen');
 	var whenSocketClosed = Hub.createDistributor('whenSocketClosed');
 	var routeSets = Hub.createMapDecorator();
 
-	static create(s,f) => new RequestSpecsClient(s,f);
+	static create(s,f) => new ClientSocket(s,f);
 
-	RequestSpecsClient(String s,[Function n]): super(s,Hub.switchUnless(n,(m){ return true; })){
+	ClientSocket(String s,[Function n]): super(s,Hub.switchUnless(n,(m){ return true; })){
 		this.route('*');
 	}
 
@@ -77,7 +77,7 @@ class SocketireClient{
 
 	dynamic space(String nm,String space,[Function matcher]){
 	  if(this.subspace.has(nm)) return this.subspace.get(nm);
-	  var sub = RequestSpecsClient.create(space,matcher);
+	  var sub = ClientSocket.create(space,matcher);
 	  this.subspace.add(nm,sub);
 	  return sub;
 	}
