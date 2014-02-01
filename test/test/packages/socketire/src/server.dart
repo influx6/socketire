@@ -211,7 +211,6 @@ class WebSocketRequestServer extends WebSocketRequest{
 
 	void socketSend(dynamic data){
 		if(!this.isSocket) return;
-		print('sending: $data');
 		this.socket.add(data);
 	}
 
